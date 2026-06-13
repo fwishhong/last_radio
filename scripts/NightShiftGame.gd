@@ -1313,13 +1313,14 @@ func _apply_director_event(id: String) -> void:
 		data["pressure"] = max(float(data.get("pressure", 0.0)), _generator_pressure(0.9 + current_level_index * 0.22))
 		data["value"] = max(0.0, float(data.get("value", 100.0)) - _roll_time(5.0, 10.0))
 		hotspots[id] = data
-		_add_log("")kind", "")) == "antenna":
+		if str(data.get("kind", "")) == "antenna":
+			_add_log("")
 		data["active"] = true
 		data["warning"] = true
 		data["pressure"] = max(float(data.get("pressure", 0.0)), _antenna_pressure(1.1 + current_level_index * 0.16))
 		data["value"] = max(0.0, float(data.get("value", 100.0)) - _roll_time(7.0, 13.0))
 		hotspots[id] = data
-		_add_log("")kind", "")) == "support":
+		_add_log("")ind", "")) == "support":
 		data["active"] = true
 		data["warning"] = true
 		data["pressure"] = max(float(data.get("pressure", 0.0)), 0.75 + current_level_index * 0.10)
@@ -1519,12 +1520,13 @@ func _select_hotspot(id: String) -> bool:
 		first_door_hint_done = true
 	if str(data.get("kind", "")) == "radio" and (not radio_available or blackout or radio_completed):
 		if blackout:
-			_add_log("")鐢�›彴宸�Œ�粡�Ž��ƒ��‚�氾紝缁�…�”��€��œ�‡�—‚�„�獥�Š†?)
+			_add_log("")�›彴宸�Œ�粡�Ž��ƒ��‚�氾紝缁�…�”��€��œ�‡�—‚�„�獥�Š†?)
 		else:
-			_add_log("")kind", "")) == "radio" and _antenna_signal_low():
-		_add_log("")work_position"] as Vector2
+			if str(data.get("kind", "")) == "radio" and _antenna_signal_low():
+			_add_log("")
+		_add_log("")ork_position"] as Vector2
 	player_route = _route_to_hotspot(id, player_pos)
-	_add_log("")name", id)))
+	_add_log("")ame", id)))
 	return true
 
 func _run_timeline() -> void:
@@ -1535,7 +1537,7 @@ func _run_timeline() -> void:
 		events_done["generator_flicker"] = true
 		hotspots["generator"]["active"] = true
 		hotspots["generator"]["pressure"] = _generator_pressure(1.15 + current_level_index * 0.35)
-		_add_log("")generator_second", 999.0) and level_num >= 5 and not bool(events_done.get("generator_second", false)):
+		_add_log("")enerator_second", 999.0) and level_num >= 5 and not bool(events_done.get("generator_second", false)):
 		events_done["generator_second"] = true
 		hotspots["generator"]["active"] = true
 		hotspots["generator"]["pressure"] = max(float(hotspots["generator"].get("pressure", 0.0)), _generator_pressure(1.75 + current_level_index * 0.25))
@@ -1576,7 +1578,7 @@ func _run_timeline() -> void:
 		radio_missed = true
 		radio_available = false
 		hotspots["radio"]["active"] = false
-		_add_log("")hard_push", 78.0) and not bool(events_done.get("hard_push", false)):
+		_add_log("")ard_push", 78.0) and not bool(events_done.get("hard_push", false)):
 		events_done["hard_push"] = true
 		_start_assault("front_door", _door_pressure(6.8 + current_level_index * 0.7), 62.0, "姝�‰棬�œ�„棬�—‚�•€竴�’��ƒ�渿�’��”‹潵�Š†?, true)
 		_start_assault("left_window", _window_pressure(6.2 + current_level_index * 0.6), 64.0, "宸︾獥�™堝搷�œ�—�紝杩欐�‚��‡�˜�‚��ƒ��‚�?, true)
@@ -1584,7 +1586,7 @@ func _run_timeline() -> void:
 			_start_assault("right_window", _window_pressure(6.0 + current_level_index * 0.6), 64.0, "需要处理"generator"]["pressure"] = _generator_pressure(1.8 + current_level_index * 0.25)
 		if level_num >= 4:
 			_start_antenna_trouble(_antenna_pressure(1.25 + current_level_index * 0.18), 64.0, "需要处理"hard_push_antenna")
-		_add_log("")late_push", 999.0) and not bool(events_done.get("late_push", false)):
+		_add_log("")ate_push", 999.0) and not bool(events_done.get("late_push", false)):
 		events_done["late_push"] = true
 		_apply_late_pressure_wave("需要处理"final_pressure", 999.0) and not bool(events_done.get("final_pressure", false)):
 		events_done["final_pressure"] = true
@@ -1719,14 +1721,14 @@ func _apply_rhythm_pressure(id: String) -> void:
 		data["value"] = max(0.0, float(data.get("value", 100.0)) - _roll_time(3.0, 6.0))
 		hotspots[id] = data
 		_play_sfx("warning", -3.0)
-		_add_log("")antenna":
+		_add_log("")ntenna":
 		data["active"] = true
 		data["warning"] = true
 		data["pressure"] = max(float(data.get("pressure", 0.0)), _antenna_pressure(0.62 + current_level_index * 0.10))
 		data["value"] = max(0.0, float(data.get("value", 100.0)) - _roll_time(4.0, 7.0))
 		hotspots[id] = data
 		_play_sfx("antenna", -4.0)
-		_add_log("")support":
+		_add_log("")upport":
 		data["active"] = true
 		data["warning"] = true
 		data["pressure"] = max(float(data.get("pressure", 0.0)), 0.45 + current_level_index * 0.06)
@@ -2128,7 +2130,7 @@ func _complete_radio_call() -> void:
 	elif _level_number() == 3 and not bool(allies.get("elias", false)):
 		allies["elias"] = true
 		_add_log("")
-		_add_log("")鐢�›彴�Ž��ƒ��‚�氫簡�”›屽�˜��—ˆ�ˆ��•�ˆ�‰�‰�š�„€緱�‘™佽�–�–�屻�‚�?)
+		_add_log("")�›彴�Ž��ƒ��‚�氫簡�”›屽�˜��—ˆ�ˆ��•�ˆ�‰�‰�š�„€緱�‘™佽�–�–�屻�‚�?)
 
 func _update_hotspots(delta: float) -> void:
 	plank_cooldown = max(0.0, plank_cooldown - delta)
@@ -2163,7 +2165,7 @@ func _update_hotspots(delta: float) -> void:
 		_play_sfx("blackout")
 		_add_log("")
 		_play_sfx("power_restore")
-		_add_log("")breach_timer", -1.0)) >= BREACH_GRACE:
+		_add_log("")reach_timer", -1.0)) >= BREACH_GRACE:
 			_finish_night(false, "%s�š�‚��Œ’寮�‚��”›屽�•�澶�ƒ�‘�’��ƒ��‚�? % str(data.get("name", id)))
 			return
 	if night_elapsed >= _night_duration():
@@ -2432,7 +2434,7 @@ func _use_emergency_plank() -> bool:
 		return false
 	var target := _most_urgent_barrier()
 	if target == "":
-		_add_log("")plank")
+		_add_log("")lank")
 	_add_log("浣�Š�妸�ˆ�„��˜鐢�•��‚œ%s�”›屾殏�ƒ�ˆ��…浣�Ž簡鍐�’�š��Š†? % str(hotspots[target].get("name", target)))
 	_refresh_ui()
 	return true
@@ -3825,7 +3827,7 @@ func _rebuild_pause_buttons() -> void:
 func _save_game() -> void:
 	var slot := _level_number()
 	if NightShiftSave.save(self, slot):
-		_add_log("")night":
+		_add_log("")ight":
 		return
 	var slot_load := _level_number()
 	if NightShiftSave.has_save(slot_load) and NightShiftSave.load(self, slot_load):
