@@ -1327,7 +1327,7 @@ func _apply_director_event(id: String) -> void:
 		data["pressure"] = max(float(data.get("pressure", 0.0)), 0.75 + current_level_index * 0.10)
 		data["value"] = max(0.0, float(data.get("value", 100.0)) - _roll_time(6.0, 12.0))
 		hotspots[id] = data
-		_add_log("%s�–��ˆ�Ÿ�œ�†�捣绾�ˆ��…�”›屽緱�Ž��•Œ�”–杩�›��“澶�‹��‚Š�Š†? % str(data.get("name", id)))
+		_add_log("%s" % str(data.get("name", id)))
 		return
 	var pressure := _door_pressure(2.5 + current_level_index * 0.35) if id == "front_door" or id == "back_door" else _window_pressure(2.7 + current_level_index * 0.35)
 	data["active"] = true
@@ -1336,7 +1336,7 @@ func _apply_director_event(id: String) -> void:
 	data["pressure"] = max(float(data.get("pressure", 0.0)), pressure)
 	data["value"] = max(0.0, float(data.get("value", 100.0)) - _roll_time(3.0, 7.0))
 	hotspots[id] = data
-	_add_log("%s澶栫�Š�’跺�•��—ˆ�Ž�…�‰�ƒ�紝�“嬩竴�‰�Ž�紶�‰�ƒ��˜��Ž��ˆ��‚��…�‘�Ž��‚��š��Š†? % str(data.get("name", id)))
+	_add_log("%s" % str(data.get("name", id)))
 
 func _debug_step(delta: float) -> void:
 	if phase != "night":
@@ -1521,13 +1521,13 @@ func _select_hotspot(id: String) -> bool:
 		first_door_hint_done = true
 	if str(data.get("kind", "")) == "radio" and (not radio_available or blackout or radio_completed):
 		if blackout:
-			_add_log("")�›彴宸�Œ�粡�Ž��ƒ��‚�氾紝缁�…�”��€��œ�‡�—‚�„�獥�Š†?)
+			_add_log("")
 		else:
 			if str(data.get("kind", "")) == "radio" and _antenna_signal_low():
-			_add_log("")
-		_add_log("")ork_position"] as Vector2
+				_add_log("")
+		_add_log("")
 	player_route = _route_to_hotspot(id, player_pos)
-	_add_log("")ame", id)))
+	_add_log("")
 	return true
 
 func _run_timeline() -> void:
@@ -1538,7 +1538,7 @@ func _run_timeline() -> void:
 		events_done["generator_flicker"] = true
 		hotspots["generator"]["active"] = true
 		hotspots["generator"]["pressure"] = _generator_pressure(1.15 + current_level_index * 0.35)
-		_add_log("")enerator_second", 999.0) and level_num >= 5 and not bool(events_done.get("generator_second", false)):
+		_add_log("")
 		events_done["generator_second"] = true
 		hotspots["generator"]["active"] = true
 		hotspots["generator"]["pressure"] = max(float(hotspots["generator"].get("pressure", 0.0)), _generator_pressure(1.75 + current_level_index * 0.25))
@@ -1579,7 +1579,7 @@ func _run_timeline() -> void:
 		radio_missed = true
 		radio_available = false
 		hotspots["radio"]["active"] = false
-		_add_log("")ard_push", 78.0) and not bool(events_done.get("hard_push", false)):
+		_add_log("")
 		events_done["hard_push"] = true
 		_start_assault("front_door", _door_pressure(6.8 + current_level_index * 0.7), 62.0, "姝�‰棬�œ�„棬�—‚�•€竴�’��ƒ�渿�’��”‹潵�Š†?, true)
 		_start_assault("left_window", _window_pressure(6.2 + current_level_index * 0.6), 64.0, "宸︾獥�™堝搷�œ�—�紝杩欐�‚��‡�˜�‚��ƒ��‚�?, true)
@@ -1587,7 +1587,7 @@ func _run_timeline() -> void:
 			_start_assault("right_window", _window_pressure(6.0 + current_level_index * 0.6), 64.0, "需要处理"generator"]["pressure"] = _generator_pressure(1.8 + current_level_index * 0.25)
 		if level_num >= 4:
 			_start_antenna_trouble(_antenna_pressure(1.25 + current_level_index * 0.18), 64.0, "需要处理"hard_push_antenna")
-		_add_log("")ate_push", 999.0) and not bool(events_done.get("late_push", false)):
+		_add_log("")
 		events_done["late_push"] = true
 		_apply_late_pressure_wave("需要处理"final_pressure", 999.0) and not bool(events_done.get("final_pressure", false)):
 		events_done["final_pressure"] = true
@@ -1722,21 +1722,21 @@ func _apply_rhythm_pressure(id: String) -> void:
 		data["value"] = max(0.0, float(data.get("value", 100.0)) - _roll_time(3.0, 6.0))
 		hotspots[id] = data
 		_play_sfx("warning", -3.0)
-		_add_log("")ntenna":
+		_add_log("")
 		data["active"] = true
 		data["warning"] = true
 		data["pressure"] = max(float(data.get("pressure", 0.0)), _antenna_pressure(0.62 + current_level_index * 0.10))
 		data["value"] = max(0.0, float(data.get("value", 100.0)) - _roll_time(4.0, 7.0))
 		hotspots[id] = data
 		_play_sfx("antenna", -4.0)
-		_add_log("")upport":
+		_add_log("")
 		data["active"] = true
 		data["warning"] = true
 		data["pressure"] = max(float(data.get("pressure", 0.0)), 0.45 + current_level_index * 0.06)
 		data["value"] = max(0.0, float(data.get("value", 100.0)) - _roll_time(3.0, 6.0))
 		hotspots[id] = data
 		_play_sfx("support", -4.0)
-		_add_log("%s�–��ˆ�Ÿ�ˆ�‰�‰�˜嬩�†澹伴�…�鍠婁簡�“�‚��™�ƒ�紝�—‡�‚��‘•佹�Š�Œ�™��…�“�‚�鐪笺�‚�? % str(data.get("name", id)))
+		_add_log("%s" % str(data.get("name", id)))
 		return
 	data["active"] = true
 	data["warning"] = true
@@ -1745,7 +1745,7 @@ func _apply_rhythm_pressure(id: String) -> void:
 	data["value"] = max(0.0, float(data.get("value", 100.0)) - _roll_time(1.5, 4.0))
 	hotspots[id] = data
 	_play_sfx("warning", -4.0)
-	_add_log("%s澶栨湁褰�ž�“™�’��‹�Ž�”›�ƒ�•�Œ�„ƒ�Œ’�“婏紝浣�——０�—Š�†��‡�缁�“�ŸŒ�œ�—��‚�? % str(data.get("name", id)))
+	_add_log("%s" % str(data.get("name", id)))
 
 func _rhythm_barrier_pressure(id: String) -> float:
 	if id == "front_door" or id == "back_door":
@@ -2067,7 +2067,7 @@ func _work_on_hotspot(id: String, rate: float, delta: float) -> void:
 			data["temp_seal"] = _temp_seal_duration()
 			data["warning"] = false
 			data["breach_timer"] = -1.0
-			_add_log("%s�š�‚�复�ƒ跺�š�浣忥紝�‘��Š��‹��“�‚�灏�Ž細�Ž裤�‚�? % str(data.get("name", id)))
+			_add_log("%s" % str(data.get("name", id)))
 		if kind != "antenna":
 			data["value"] = min(_max_value(id), float(data.get("value", 0.0)) + rate * delta)
 		if kind == "barrier" and bool(data.get("warning", false)) and not bool(data.get("assault", false)) and float(data.get("value", 0.0)) >= _brace_threshold(id):
@@ -2080,7 +2080,7 @@ func _work_on_hotspot(id: String, rate: float, delta: float) -> void:
 			data["pressure"] = 0.0
 			data["temp_seal"] = 0.0
 			data["breach_timer"] = -1.0
-			_add_log("%s�š�‚�交搴�›��€Š鍥�‚��“�”›屾殏�ƒ�œ��‰鐢�„��•€鐩�ˆ˜�‚�? % str(data.get("name", id)))
+			_add_log("%s" % str(data.get("name", id)))
 		if kind == "barrier" and float(data.get("value", 0.0)) > 24.0:
 			data["breach_timer"] = -1.0
 		if kind == "antenna":
@@ -2107,7 +2107,7 @@ func _brace_warning(id: String, data: Dictionary) -> Dictionary:
 	data["breach_timer"] = -1.0
 	if id != "front_door" and id != "back_door":
 		data["active"] = false
-	_add_log("%s�š�‚�彁�“�…�ž鍥�Œ�紝澶栭潰鐨�‹��Œ’�‘�˜殏�ƒ跺�‡�“嬪�“�œ�—��‚�? % str(data.get("name", id)))
+	_add_log("%s" % str(data.get("name", id)))
 	return data
 
 func _brace_threshold(id: String) -> float:
@@ -2131,7 +2131,7 @@ func _complete_radio_call() -> void:
 	elif _level_number() == 3 and not bool(allies.get("elias", false)):
 		allies["elias"] = true
 		_add_log("")
-		_add_log("")�›彴�Ž��ƒ��‚�氫簡�”›屽�˜��—ˆ�ˆ��•�ˆ�‰�‰�š�„€緱�‘™佽�–�–�屻�‚�?)
+		_add_log("")
 
 func _update_hotspots(delta: float) -> void:
 	plank_cooldown = max(0.0, plank_cooldown - delta)
@@ -2166,7 +2166,7 @@ func _update_hotspots(delta: float) -> void:
 		_play_sfx("blackout")
 		_add_log("")
 		_play_sfx("power_restore")
-		_add_log("")reach_timer", -1.0)) >= BREACH_GRACE:
+		_add_log("")
 			_finish_night(false, "%s�š�‚��Œ’寮�‚��”›屽�•�澶�ƒ�‘�’��ƒ��‚�? % str(data.get("name", id)))
 			return
 	if night_elapsed >= _night_duration():
@@ -2435,7 +2435,7 @@ func _use_emergency_plank() -> bool:
 		return false
 	var target := _most_urgent_barrier()
 	if target == "":
-		_add_log("")lank")
+		_add_log("")
 	_add_log("浣�Š�妸�ˆ�„��˜鐢�•��‚œ%s�”›屾殏�ƒ�ˆ��…浣�Ž簡鍐�’�š��Š†? % str(hotspots[target].get("name", target)))
 	_refresh_ui()
 	return true
@@ -3828,7 +3828,7 @@ func _rebuild_pause_buttons() -> void:
 func _save_game() -> void:
 	var slot := _level_number()
 	if NightShiftSave.save(self, slot):
-		_add_log("")ight":
+		_add_log("")
 		return
 	var slot_load := _level_number()
 	if NightShiftSave.has_save(slot_load) and NightShiftSave.load(self, slot_load):
@@ -3926,7 +3926,7 @@ func _unlock_achievement(id: String) -> void:
 		return
 	achievements_unlocked[id] = true
 	var ac: Dictionary = ac_list[id]
-	_add_log("") % [str(ac.get("name", id)), str(ac.get("desc", ""))])
+	_add_log("")
 	_show_achievement_notification(id)
 static func _achievement_defs() -> Dictionary:
 	return {
