@@ -3,8 +3,8 @@
 *.import
 *.translation
 import/
-*.autosave
-*.tmp
+# Large assets (use Git LFS)
+assets/
 # IDE
 .vscode/
 .idea/
@@ -16,5 +16,5 @@ __pycache__/
 *.pyc
 # Logs
 *.log
-# Keep actual assets but not their .godot metadata
-# Note: .godot/ is the imported files cache which is large
+*.autosave
+*.tmp
