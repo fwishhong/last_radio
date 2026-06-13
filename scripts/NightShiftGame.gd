@@ -1320,7 +1320,8 @@ func _apply_director_event(id: String) -> void:
 		data["pressure"] = max(float(data.get("pressure", 0.0)), _antenna_pressure(1.1 + current_level_index * 0.16))
 		data["value"] = max(0.0, float(data.get("value", 100.0)) - _roll_time(7.0, 13.0))
 		hotspots[id] = data
-		_add_log("")ind", "")) == "support":
+		if str(data.get("kind", "")) == "support":
+			_add_log("")
 		data["active"] = true
 		data["warning"] = true
 		data["pressure"] = max(float(data.get("pressure", 0.0)), 0.75 + current_level_index * 0.10)
