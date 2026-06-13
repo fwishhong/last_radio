@@ -1,0 +1,723 @@
+[
+  {
+    "id": "day1_first_call",
+    "fixed_day": 1,
+    "category": "tutorial",
+    "source": "北桥居民楼",
+    "confidence": "高",
+    "title": "第一通求救",
+    "signal_text": "一个女人反复报出门牌号。她说楼下已经被封，屋里还有两个孩子，电话快没电了。",
+    "choices": [
+      {
+        "label": "回应并指引撤离",
+        "description": "消耗一点电力维持通话，给她一条穿过停车场的路线。",
+        "type": "rescue",
+        "cost": {"power": 1},
+        "reward": {"trust": 6, "rescued": 2, "influence": 1},
+        "tags": ["rescued_family", "truthful_help"],
+        "schedule": [{"day": 5, "event_id": "family_arrival"}],
+        "log": "北桥母子记下了你的路线。电台第一次被人真正听见。"
+      },
+      {
+        "label": "只播通用警告",
+        "description": "不承诺救援，保留资源，但让附近的人知道避难所还在。",
+        "type": "broadcast",
+        "cost": {"power": 2},
+        "reward": {"influence": 4, "trust": 1, "truths": 1},
+        "tags": ["public_warning"],
+        "log": "你没有单独引导她，但把北桥危险区公开播出。"
+      },
+      {
+        "label": "保持监听",
+        "description": "不回应，先确认电台是否稳定。",
+        "type": "hide",
+        "cost": {},
+        "reward": {"trust": -2},
+        "tags": ["silent_refusal"],
+        "log": "求救声逐渐被噪声吞没。控制室安静得过分。"
+      }
+    ]
+  },
+  {
+    "id": "day2_mutual_shortage",
+    "fixed_day": 2,
+    "category": "resource",
+    "source": "旧菜市场 / 仁安诊所",
+    "confidence": "中",
+    "title": "两个请求只能接一个",
+    "signal_text": "菜市场有人愿用三箱罐头换药。另一边，诊所请求食物给伤员撑过今晚。两边都催你立刻决定。",
+    "choices": [
+      {
+        "label": "把食物送去诊所",
+        "description": "救人优先，短期食物压力会变重。",
+        "type": "rescue",
+        "cost": {"food": 3, "power": 1},
+        "reward": {"trust": 9, "rescued": 1, "influence": 1},
+        "tags": ["clinic_helped", "food_shortage_seed"],
+        "schedule": [{"day": 6, "event_id": "clinic_debt"}],
+        "log": "诊所记住了电台的声音，但仓库里的食物少了一截。"
+      },
+      {
+        "label": "拿药品交易",
+        "description": "用药换食物，基地更稳，但诊所会失望。",
+        "type": "trade",
+        "cost": {"medicine": 2, "power": 1},
+        "reward": {"food": 5, "trust": -3},
+        "tags": ["traded_medicine", "clinic_abandoned"],
+        "schedule": [{"day": 6, "event_id": "clinic_debt"}],
+        "log": "老周把交易记在账本上。许岚没有说话。"
+      },
+      {
+        "label": "两边都拒绝",
+        "description": "保留资源，但电台信誉会受损。",
+        "type": "refuse_rescue",
+        "cost": {},
+        "reward": {"trust": -8},
+        "tags": ["hard_refusal"],
+        "log": "你把频段切回静默。两边都没有再呼叫。"
+      }
+    ]
+  },
+  {
+    "id": "day3_dispatch_rooftop",
+    "fixed_day": 3,
+    "category": "member",
+    "source": "体育馆楼顶",
+    "confidence": "高",
+    "title": "天线需要手动复位",
+    "signal_text": "沈洛判断楼顶天线偏转，今天不处理，后续信号会越来越弱。楼顶风很大，附近也有人影。",
+    "choices": [
+      {
+        "label": "派沈洛上楼",
+        "description": "专业对口，但他不擅长外出。",
+        "type": "repair",
+        "cost": {},
+        "reward": {"power": 2, "influence": 2},
+        "dispatch": true,
+        "member": "shen_luo",
+        "risk": {"injury": 0.16, "missing": 0.04, "tired": 0.55},
+        "tags": ["antenna_fixed"],
+        "schedule": [{"day": 5, "event_id": "rooftop_return"}],
+        "log": "沈洛带着工具包上楼。半小时后，短波噪声低了许多。"
+      },
+      {
+        "label": "派阿晴带路",
+        "description": "她熟悉楼顶通道，维修效率较低但更安全。",
+        "type": "repair",
+        "cost": {"power": 1},
+        "reward": {"influence": 2},
+        "dispatch": true,
+        "member": "a_qing",
+        "risk": {"injury": 0.12, "missing": 0.03, "tired": 0.45},
+        "tags": ["antenna_checked"],
+        "schedule": [{"day": 5, "event_id": "rooftop_return"}],
+        "log": "阿晴绕开了主楼梯。天线没有彻底修好，但能撑几天。"
+      },
+      {
+        "label": "暂不派人",
+        "description": "避免外出风险，但电台影响力下降。",
+        "type": "hide",
+        "cost": {},
+        "reward": {"influence": -2, "trust": -2},
+        "tags": ["antenna_ignored"],
+        "log": "天线仍在风里摇晃。几段信号变成了无法辨认的噪声。"
+      }
+    ]
+  },
+  {
+    "id": "day4_blacktower_first",
+    "fixed_day": 4,
+    "category": "faction",
+    "source": "黑塔车队",
+    "confidence": "高",
+    "title": "黑塔车队占用频段",
+    "signal_text": "一个冷静的男声要求你停止公开求救坐标。他们愿意用电池和食物交换安静，也暗示自己知道避难所位置。",
+    "choices": [
+      {
+        "label": "接受交易",
+        "description": "资源立刻缓解，但电台会被贴上车队标签。",
+        "type": "trade",
+        "cost": {},
+        "reward": {"power": 3, "food": 3, "trust": -5, "blacktower": 1},
+        "tags": ["blacktower_trade"],
+        "schedule": [{"day": 6, "event_id": "blacktower_debt"}],
+        "log": "车队把物资留在东门外。老周说这笔交易很值，许岚不认同。"
+      },
+      {
+        "label": "公开他们的威胁",
+        "description": "提升影响力，但会激怒车队。",
+        "type": "broadcast",
+        "cost": {"power": 2},
+        "reward": {"influence": 6, "trust": 4, "truths": 1},
+        "tags": ["blacktower_exposed"],
+        "schedule": [{"day": 6, "event_id": "blacktower_debt"}],
+        "log": "你把威胁内容完整播出。几个陌生频段向你致谢。"
+      },
+      {
+        "label": "保持沉默",
+        "description": "不交易也不对抗，短期避免冲突。",
+        "type": "hide",
+        "cost": {},
+        "reward": {"trust": -2},
+        "tags": ["blacktower_silence"],
+        "log": "你没有回应。黑塔车队重复了三遍坐标，然后离开频段。"
+      }
+    ]
+  },
+  {
+    "id": "day5_internal_vote",
+    "fixed_day": 5,
+    "category": "member",
+    "source": "基地内部",
+    "confidence": "高",
+    "title": "控制室争执",
+    "signal_text": "许岚质问你：电台到底是用来救人，还是用来让基地活下去？老周要求把资源优先级写成规矩。",
+    "choices": [
+      {
+        "label": "承诺优先救援",
+        "description": "提升信任，但后续拒绝救援会更痛。",
+        "type": "broadcast",
+        "cost": {"power": 1},
+        "reward": {"trust": 8, "influence": 2},
+        "tags": ["rescue_doctrine"],
+        "log": "你在内部频道宣布：能救的人，先尽力救。"
+      },
+      {
+        "label": "确立资源红线",
+        "description": "基地更稳，但成员关系变冷。",
+        "type": "hide",
+        "cost": {},
+        "reward": {"food": 1, "medicine": 1, "trust": -3},
+        "tags": ["ration_doctrine"],
+        "log": "老周把新规贴在仓库门口。许岚撕掉了一角。"
+      },
+      {
+        "label": "让成员投票",
+        "description": "接受不确定结果，换取内部参与感。",
+        "type": "member_vote",
+        "cost": {},
+        "reward": {"trust": 4, "influence": 1},
+        "tags": ["shared_rule"],
+        "log": "控制室吵了很久，但每个人都在纸上写下了底线。"
+      }
+    ]
+  },
+  {
+    "id": "day6_reckoning",
+    "fixed_day": 6,
+    "category": "consequence",
+    "source": "多频段重叠",
+    "confidence": "混杂",
+    "title": "所有后果同时到来",
+    "signal_text": "被救者、被拒绝者、交易对象、陌生听众都在今天挤进频段。你必须决定电台接下来站在哪一边。",
+    "choices": [
+      {
+        "label": "公开完整日志",
+        "description": "承认每个选择，包括错误。影响力上升，信任可能波动。",
+        "type": "broadcast",
+        "cost": {"power": 2},
+        "reward": {"influence": 5, "trust": 3, "truths": 1},
+        "tags": ["full_log_public"],
+        "log": "你播出了七页日志。沉默之后，有人开始回传自己的位置。"
+      },
+      {
+        "label": "只播好消息",
+        "description": "暂时稳住基地，但谣言风险加重。",
+        "type": "hide",
+        "cost": {"power": 1},
+        "reward": {"trust": 4, "influence": 1, "lies": 1},
+        "tags": ["rumor_spread"],
+        "schedule": [{"day": 7, "event_id": "rumor_backlash"}],
+        "log": "广播听起来很稳。只有你知道删掉了多少段录音。"
+      },
+      {
+        "label": "关闭公开频道",
+        "description": "保资源，放弃影响力。",
+        "type": "hide",
+        "cost": {},
+        "reward": {"power": 1, "trust": -5, "influence": -3},
+        "tags": ["closed_public_channel"],
+        "log": "频段暗了下去。外面的人会自己解释你的沉默。"
+      }
+    ]
+  },
+  {
+    "id": "day7_final_broadcast",
+    "fixed_day": 7,
+    "category": "finale",
+    "source": "最后电台",
+    "confidence": "由你决定",
+    "title": "最终广播",
+    "signal_text": "城市开始分区断电。你只剩一次足够远的广播机会：求援、号召、交易、隐瞒，或者指挥撤离。",
+    "choices": [
+      {
+        "label": "号召互助频段",
+        "description": "需要电力和信任，追求稳定播出。",
+        "type": "broadcast",
+        "cost": {"power": 2},
+        "reward": {"influence": 7, "trust": 5, "final_broadcast": 1, "truths": 1},
+        "tags": ["final_aid_network"],
+        "log": "你把避难所坐标、物资规则和互助频段一起播出。"
+      },
+      {
+        "label": "发布撤离指令",
+        "description": "更保守，保护基地成员优先。",
+        "type": "broadcast",
+        "cost": {"power": 1, "food": 1},
+        "reward": {"trust": 4, "final_broadcast": 1},
+        "tags": ["final_evac_order"],
+        "log": "你把所有人引向旧地铁线。电台只保留短促坐标。"
+      },
+      {
+        "label": "替黑塔发布交易公告",
+        "description": "资源大幅补充，但评价会偏向黑塔合伙人。",
+        "type": "trade",
+        "cost": {"power": 1},
+        "reward": {"food": 5, "medicine": 2, "trust": -6, "blacktower": 2, "final_broadcast": 1},
+        "tags": ["blacktower_partner"],
+        "log": "你的最后广播变成了车队公告。幸存者会记住这件事。"
+      }
+    ]
+  },
+  {
+    "id": "powerless_weak_signal",
+    "day_range": [1, 7],
+    "category": "powerless",
+    "source": "弱信号",
+    "confidence": "低",
+    "title": "电力耗尽后的断续呼叫",
+    "signal_text": "电台只能偶尔捕捉到几个字：水、孩子、车队、别开门。你无法确认来源。",
+    "choices": [
+      {
+        "label": "手摇发电短播",
+        "description": "用体力换一次短促回应。",
+        "type": "broadcast",
+        "cost": {},
+        "reward": {"influence": 1, "trust": 1},
+        "tags": ["weak_broadcast"],
+        "log": "短播只持续了十几秒，但至少有人知道你还活着。"
+      },
+      {
+        "label": "拆备用电池",
+        "description": "牺牲控制室照明，换回一点电力。",
+        "type": "repair",
+        "cost": {"trust": 2},
+        "reward": {"power": 2},
+        "tags": ["battery_stripped"],
+        "log": "控制室暗了下来，电台指示灯重新亮起。"
+      },
+      {
+        "label": "保持静默",
+        "description": "等待明天。",
+        "type": "hide",
+        "cost": {},
+        "reward": {"trust": -2},
+        "tags": ["silent_day"],
+        "log": "今天的大部分频段都被噪声吞掉了。"
+      }
+    ]
+  },
+  {
+    "id": "rooftop_return",
+    "day_range": [5, 5],
+    "category": "followup",
+    "source": "楼顶回声",
+    "confidence": "高",
+    "title": "天线的第二个信号",
+    "signal_text": "楼顶天线接到一段旧录音，里面提到体育馆附近的备用电池箱。沈洛说可以冒险再上去一次。",
+    "choices": [
+      {
+        "label": "再派人取电池",
+        "description": "高收益外出。",
+        "type": "repair",
+        "cost": {},
+        "reward": {"power": 4, "influence": 1},
+        "dispatch": true,
+        "member": "a_qing",
+        "risk": {"injury": 0.18, "missing": 0.05, "tired": 0.60},
+        "tags": ["battery_recovered"],
+        "log": "备用电池被拖回控制室，外壳上有新的刮痕。"
+      },
+      {
+        "label": "只记录坐标",
+        "description": "保守处理。",
+        "type": "hide",
+        "cost": {},
+        "reward": {"trust": 1},
+        "tags": ["battery_left"],
+        "log": "你把坐标写入日志，没有让任何人再上楼。"
+      }
+    ]
+  },
+  {
+    "id": "family_arrival",
+    "day_range": [5, 6],
+    "category": "followup",
+    "source": "北桥母子",
+    "confidence": "高",
+    "title": "敲门的孩子",
+    "signal_text": "两个孩子和一个女人出现在东门。他们认出了你的声音，但身后还跟着几名陌生人。",
+    "choices": [
+      {
+        "label": "全部接收",
+        "description": "救下更多人，食物压力上升。",
+        "type": "rescue",
+        "cost": {"food": 2, "medicine": 1},
+        "reward": {"rescued": 3, "trust": 7},
+        "tags": ["opened_gate"],
+        "log": "东门开了。孩子们进来后一直盯着电台看。"
+      },
+      {
+        "label": "只接收母子",
+        "description": "折中，伤害较小。",
+        "type": "rescue",
+        "cost": {"food": 1},
+        "reward": {"rescued": 2, "trust": 3},
+        "tags": ["limited_gate"],
+        "log": "你让母子进来，把其他人留在门外。"
+      },
+      {
+        "label": "拒绝开门",
+        "description": "保住资源，但严重伤信任。",
+        "type": "refuse_rescue",
+        "cost": {},
+        "reward": {"trust": -9},
+        "tags": ["gate_refused"],
+        "log": "门外哭声持续了很久。许岚离开了控制室。"
+      }
+    ]
+  },
+  {
+    "id": "clinic_debt",
+    "day_range": [6, 6],
+    "category": "followup",
+    "source": "仁安诊所",
+    "confidence": "中",
+    "title": "诊所回信",
+    "signal_text": "诊所终于回信。他们的语气取决于你 Day 2 的选择，但都提到一批抗生素即将过期。",
+    "choices": [
+      {
+        "label": "派许岚去谈",
+        "description": "成员事件，可能换回药品。",
+        "type": "trade",
+        "cost": {"food": 1},
+        "reward": {"medicine": 4, "trust": 1},
+        "dispatch": true,
+        "member": "xu_lan",
+        "risk": {"injury": 0.10, "missing": 0.03, "tired": 0.55},
+        "tags": ["clinic_contact"],
+        "log": "许岚带回药品，也带回了诊所伤员名单。"
+      },
+      {
+        "label": "公开请求援助诊所",
+        "description": "用影响力换外部互助。",
+        "type": "broadcast",
+        "cost": {"power": 2},
+        "reward": {"influence": 4, "trust": 2, "truths": 1},
+        "tags": ["clinic_public_aid"],
+        "log": "几个频段承诺向诊所送水和绷带。"
+      },
+      {
+        "label": "不再介入",
+        "description": "避免继续投入。",
+        "type": "hide",
+        "cost": {},
+        "reward": {"trust": -3},
+        "tags": ["clinic_dropped"],
+        "log": "诊所的呼号被移到日志末尾。"
+      }
+    ]
+  },
+  {
+    "id": "blacktower_debt",
+    "day_range": [6, 7],
+    "category": "followup",
+    "source": "黑塔车队",
+    "confidence": "高",
+    "title": "车队来收账",
+    "signal_text": "黑塔车队再次出现。他们要你交出一份避难所名单，或公开承认车队维持了这片区域秩序。",
+    "choices": [
+      {
+        "label": "交出外围名单",
+        "description": "换取资源，但牺牲信任。",
+        "type": "trade",
+        "cost": {},
+        "reward": {"food": 4, "power": 2, "trust": -10, "blacktower": 1},
+        "tags": ["blacktower_partner"],
+        "log": "名单发出后，控制室没有人愿意看你。"
+      },
+      {
+        "label": "拒绝并公开收账内容",
+        "description": "高影响力，高风险。",
+        "type": "broadcast",
+        "cost": {"power": 2},
+        "reward": {"influence": 5, "trust": 4, "truths": 1},
+        "tags": ["blacktower_defied"],
+        "log": "车队频道第一次沉默。几秒后，他们开始干扰你的频段。"
+      },
+      {
+        "label": "拖延回应",
+        "description": "短期避险。",
+        "type": "hide",
+        "cost": {},
+        "reward": {"trust": -2},
+        "tags": ["blacktower_delayed"],
+        "log": "你说需要一天核对名单。对方笑了。"
+      }
+    ]
+  },
+  {
+    "id": "rumor_backlash",
+    "day_range": [7, 7],
+    "category": "followup",
+    "source": "南区匿名频段",
+    "confidence": "低",
+    "title": "被剪掉的录音",
+    "signal_text": "有人播放了你删掉的录音片段。许多人开始怀疑电台一直在筛选真相。",
+    "choices": [
+      {
+        "label": "承认隐瞒",
+        "description": "信任受损，但停止扩散。",
+        "type": "broadcast",
+        "cost": {"power": 1},
+        "reward": {"trust": -2, "influence": 2, "truths": 1},
+        "tags": ["admitted_lie"],
+        "log": "你承认自己删掉了录音。至少这次没有再删。"
+      },
+      {
+        "label": "继续否认",
+        "description": "追求短期稳定。",
+        "type": "hide",
+        "cost": {},
+        "reward": {"trust": -6, "lies": 1},
+        "tags": ["rumor_spread"],
+        "log": "你否认了指控。匿名频段开始循环播放原始片段。"
+      }
+    ]
+  },
+  {
+    "id": "internal_low_trust",
+    "day_range": [4, 7],
+    "category": "followup",
+    "source": "基地内部",
+    "confidence": "高",
+    "title": "仓库门口的纸条",
+    "signal_text": "有人在仓库门上贴了纸条：如果电台只保护少数人，我们为什么还要听它？",
+    "choices": [
+      {
+        "label": "公开资源账本",
+        "description": "透明换信任。",
+        "type": "broadcast",
+        "cost": {"power": 1},
+        "reward": {"trust": 8, "influence": 1, "truths": 1},
+        "tags": ["ledger_public"],
+        "log": "每一罐食物、每一片药都被读出来。争吵没有消失，但声音小了。"
+      },
+      {
+        "label": "让老周管制仓库",
+        "description": "资源稳定，信任更差。",
+        "type": "hide",
+        "cost": {},
+        "reward": {"food": 2, "trust": -4},
+        "tags": ["warehouse_locked"],
+        "log": "老周换了锁。夜里有人踢了仓库门。"
+      }
+    ]
+  },
+  {
+    "id": "battery_exchange",
+    "day_range": [1, 6],
+    "category": "resource",
+    "source": "修表铺",
+    "confidence": "中",
+    "title": "电池交换",
+    "signal_text": "修表铺有一箱纽扣电池和几块旧电源板。他们只要食物，不要承诺。",
+    "choices": [
+      {"label": "交易电池", "description": "补充电力。", "type": "trade", "cost": {"food": 2}, "reward": {"power": 3}, "tags": ["battery_trade"], "log": "旧电源板勉强能接进电台。"},
+      {"label": "压低价格", "description": "省资源但伤信誉。", "type": "trade", "cost": {"food": 1}, "reward": {"power": 2, "trust": -2}, "tags": ["hard_bargain"], "log": "你换到了电池，也换来了对方的一句脏话。"},
+      {"label": "拒绝交易", "description": "不消耗食物。", "type": "hide", "cost": {}, "reward": {}, "tags": ["trade_skipped"], "log": "修表铺改去别的频段叫卖。"}
+    ]
+  },
+  {
+    "id": "water_queue",
+    "day_range": [1, 5],
+    "category": "rescue",
+    "source": "西街取水点",
+    "confidence": "中",
+    "title": "取水队排队冲突",
+    "signal_text": "西街取水点有人抢队，求你广播新的排队规则。你不在现场，但所有人都听着。",
+    "choices": [
+      {"label": "广播排队规则", "description": "消耗电力，增加信任。", "type": "broadcast", "cost": {"power": 1}, "reward": {"trust": 4, "influence": 2, "truths": 1}, "tags": ["water_rule"], "log": "取水点安静了一阵。有人照着你的规则念号。"},
+      {"label": "派阿晴过去", "description": "外出调解。", "type": "rescue", "cost": {}, "reward": {"trust": 5}, "dispatch": true, "member": "a_qing", "risk": {"injury": 0.08, "missing": 0.02, "tired": 0.50}, "tags": ["water_mediated"], "log": "阿晴回来时嗓子哑了，但没人受伤。"},
+      {"label": "不介入", "description": "避免承担责任。", "type": "hide", "cost": {}, "reward": {"trust": -3}, "tags": ["water_ignored"], "log": "取水点后来传来玻璃碎裂声。"}
+    ]
+  },
+  {
+    "id": "pharmacy_map",
+    "day_range": [3, 6],
+    "category": "dispatch",
+    "source": "匿名地图",
+    "confidence": "低",
+    "title": "药房后门地图",
+    "signal_text": "有人发来一段路线，说可以从后门进药房。沈洛怀疑这是钓人离开避难所的陷阱。",
+    "choices": [
+      {"label": "派阿晴侦查", "description": "较稳的外出。", "type": "rescue", "cost": {}, "reward": {"medicine": 3}, "dispatch": true, "member": "a_qing", "risk": {"injury": 0.18, "missing": 0.08, "tired": 0.60}, "tags": ["pharmacy_scouted"], "log": "阿晴确认后门能走，但门内有新鲜脚印。"},
+      {"label": "公开地图提醒风险", "description": "影响力上升。", "type": "broadcast", "cost": {"power": 1}, "reward": {"influence": 3, "trust": 1, "truths": 1}, "tags": ["map_public"], "log": "你把地图和风险一起播出。南边有人回传了替代路线。"},
+      {"label": "删掉地图", "description": "避免诱导外出。", "type": "hide", "cost": {}, "reward": {"trust": -1}, "tags": ["map_deleted"], "log": "地图被移出日志，但你记住了那条后门。"}
+    ]
+  },
+  {
+    "id": "southern_aid",
+    "day_range": [3, 6],
+    "category": "faction",
+    "source": "南区互助会",
+    "confidence": "中",
+    "title": "南区互助会请求中继",
+    "signal_text": "南区互助会想借你的频段转发失散名单。他们没有物资，但承诺共享安全路线。",
+    "choices": [
+      {"label": "转发名单", "description": "影响力与信任增长。", "type": "broadcast", "cost": {"power": 2}, "reward": {"influence": 5, "trust": 3, "truths": 1}, "tags": ["south_relay"], "log": "一长串名字穿过噪声。有人在频道里哭了。"},
+      {"label": "要求路线先到账", "description": "更功利。", "type": "trade", "cost": {"power": 1}, "reward": {"food": 1, "medicine": 1, "trust": -1}, "tags": ["south_bargain"], "log": "互助会发来路线，但语气明显冷了。"},
+      {"label": "拒绝占用频段", "description": "保电力。", "type": "hide", "cost": {}, "reward": {"trust": -2}, "tags": ["south_refused"], "log": "南区换了频段。你听不清他们后来有没有成功。"}
+    ]
+  },
+  {
+    "id": "false_mayday",
+    "day_range": [2, 6],
+    "category": "rumor",
+    "source": "伪装求救",
+    "confidence": "低",
+    "title": "重复三遍的求救词",
+    "signal_text": "一段求救每隔三分钟重复一次，连咳嗽声都完全一样。沈洛认为这是录音。",
+    "choices": [
+      {"label": "标记为可疑并广播", "description": "告诉其他人小心。", "type": "broadcast", "cost": {"power": 1}, "reward": {"influence": 3, "trust": 1, "truths": 1}, "tags": ["fake_warning"], "log": "你播出录音特征。两个频段说他们差点上当。"},
+      {"label": "仍派人确认", "description": "冒险救援。", "type": "rescue", "cost": {}, "reward": {"trust": 2}, "dispatch": true, "member": "a_qing", "risk": {"injury": 0.22, "missing": 0.10, "tired": 0.45}, "tags": ["checked_fake"], "log": "阿晴找到了录音机，旁边有空弹壳。"},
+      {"label": "当作噪声忽略", "description": "不投入。", "type": "hide", "cost": {}, "reward": {}, "tags": ["fake_ignored"], "log": "那段求救继续重复，直到深夜。"}
+    ]
+  },
+  {
+    "id": "preacher_broadcast",
+    "day_range": [3, 7],
+    "category": "rumor",
+    "source": "白塔布道者",
+    "confidence": "低",
+    "title": "末日布道抢频",
+    "signal_text": "有人在高功率频段宣称城市已经被放弃，要求幸存者停止互助，等待审判。",
+    "choices": [
+      {"label": "用事实压过他", "description": "广播真实避难信息。", "type": "broadcast", "cost": {"power": 2}, "reward": {"influence": 5, "trust": 2, "truths": 1}, "tags": ["preacher_countered"], "log": "你连续读出仍在运作的水点、诊所和避难所。"},
+      {"label": "制造反向谣言", "description": "效果快，代价隐蔽。", "type": "hide", "cost": {"power": 1}, "reward": {"influence": 3, "lies": 1}, "tags": ["rumor_spread"], "log": "你伪装成另一个频段反击。沈洛听出来了，但没拆穿。"},
+      {"label": "不理会", "description": "省电。", "type": "hide", "cost": {}, "reward": {"trust": -2}, "tags": ["preacher_ignored"], "log": "布道持续了一个小时。有人开始问他说的是不是真的。"}
+    ]
+  },
+  {
+    "id": "generator_noise",
+    "day_range": [2, 6],
+    "category": "resource",
+    "source": "地下车库",
+    "confidence": "中",
+    "title": "发电机噪声",
+    "signal_text": "地下车库传来发电机声。老周认为那里有油，许岚担心噪声会引来危险。",
+    "choices": [
+      {"label": "派老周取油", "description": "高资源收益。", "type": "trade", "cost": {}, "reward": {"power": 4}, "dispatch": true, "member": "lao_zhou", "risk": {"injury": 0.18, "missing": 0.06, "tired": 0.60}, "tags": ["fuel_run"], "log": "老周回来的时候衣服上全是汽油味。"},
+      {"label": "广播警告附近居民", "description": "减少外部伤亡。", "type": "broadcast", "cost": {"power": 1}, "reward": {"trust": 2, "influence": 3, "truths": 1}, "tags": ["generator_warning"], "log": "车库附近的几户人撤离了。发电机后来停了。"},
+      {"label": "标记后跳过", "description": "不冒险。", "type": "hide", "cost": {}, "reward": {}, "tags": ["fuel_skipped"], "log": "老周把车库圈在地图上，没再提。"}
+    ]
+  },
+  {
+    "id": "refugee_gate",
+    "day_range": [3, 7],
+    "category": "rescue",
+    "source": "东门哨位",
+    "confidence": "高",
+    "title": "门外的人群",
+    "signal_text": "东门来了七个人。他们听过电台广播，要求至少给孩子和老人一点食物。",
+    "choices": [
+      {"label": "发放食物", "description": "消耗明显，信任提升。", "type": "rescue", "cost": {"food": 3}, "reward": {"trust": 7, "rescued": 1}, "tags": ["gate_food"], "log": "食物从门缝递出去。有人跪在地上说谢谢。"},
+      {"label": "只给路线", "description": "少量帮助。", "type": "broadcast", "cost": {"power": 1}, "reward": {"influence": 2, "trust": 1}, "tags": ["gate_route"], "log": "你给了他们去南区的路线。没人知道他们能否走到。"},
+      {"label": "驱离人群", "description": "保资源，重伤信任。", "type": "refuse_rescue", "cost": {}, "reward": {"trust": -7}, "tags": ["gate_driven_off"], "log": "东门重新安静，但控制室没人觉得轻松。"}
+    ]
+  },
+  {
+    "id": "black_market_meds",
+    "day_range": [3, 6],
+    "category": "trade",
+    "source": "黑市药贩",
+    "confidence": "低",
+    "title": "无标签药瓶",
+    "signal_text": "一个药贩愿意低价卖药，但药瓶没有标签。许岚要求不要把它们给重伤员。",
+    "choices": [
+      {"label": "低价买下", "description": "药品增加，信任下降。", "type": "trade", "cost": {"food": 1}, "reward": {"medicine": 3, "trust": -3}, "tags": ["dirty_meds"], "log": "药瓶被放进单独抽屉，许岚在上面贴了红纸。"},
+      {"label": "公开药贩频段", "description": "让别人自行判断。", "type": "broadcast", "cost": {"power": 1}, "reward": {"influence": 2, "trust": -1}, "tags": ["market_public"], "log": "你公开了频段，也公开了风险。"},
+      {"label": "拒绝交易", "description": "不冒险。", "type": "hide", "cost": {}, "reward": {"trust": 1}, "tags": ["dirty_meds_refused"], "log": "许岚点了点头，把药品清单重新数了一遍。"}
+    ]
+  },
+  {
+    "id": "engineer_request",
+    "day_range": [2, 6],
+    "category": "member",
+    "source": "变电站工程师",
+    "confidence": "中",
+    "title": "工程师请求接线图",
+    "signal_text": "一个自称变电站工程师的人要求你转发接线图。他可能能恢复一片街区，也可能会把电力引向黑塔控制区。",
+    "choices": [
+      {"label": "转发接线图", "description": "提高影响力和电力收益。", "type": "broadcast", "cost": {"power": 1}, "reward": {"influence": 3, "power": 2, "truths": 1}, "tags": ["grid_helped"], "log": "接线图播出后，远处几栋楼亮了十几分钟。"},
+      {"label": "要求确认身份", "description": "稳妥但收益小。", "type": "trade", "cost": {"power": 1}, "reward": {"trust": 2}, "tags": ["engineer_checked"], "log": "对方答上了三个细节。沈洛认为可信。"},
+      {"label": "拒绝技术资料", "description": "防止被利用。", "type": "hide", "cost": {}, "reward": {"trust": -1}, "tags": ["grid_refused"], "log": "工程师没有争辩，只说：那你们自己守着黑暗吧。"}
+    ]
+  },
+  {
+    "id": "infected_block",
+    "day_range": [4, 7],
+    "category": "rescue",
+    "source": "北环路",
+    "confidence": "中",
+    "title": "堵在路口的伤员",
+    "signal_text": "北环路有人受伤，被困在两辆翻车之间。他们说感染者在附近徘徊，但你只听到风声。",
+    "choices": [
+      {"label": "派许岚和阿晴救援", "description": "高成本救援。", "type": "rescue", "cost": {"medicine": 2}, "reward": {"rescued": 2, "trust": 6}, "dispatch": true, "member": "a_qing", "risk": {"injury": 0.24, "missing": 0.09, "tired": 0.70}, "tags": ["road_rescue"], "log": "救援队拖回两个人，也拖回了一路血迹。"},
+      {"label": "广播绕行路线", "description": "不直接救援。", "type": "broadcast", "cost": {"power": 1}, "reward": {"influence": 2, "trust": 1}, "tags": ["road_route"], "log": "你播出绕行路线，祝他们好运。"},
+      {"label": "判定风险过高", "description": "拒绝救援。", "type": "refuse_rescue", "cost": {}, "reward": {"trust": -5}, "tags": ["road_abandoned"], "log": "北环路的信号断在一句没有说完的话里。"}
+    ]
+  },
+  {
+    "id": "school_roof",
+    "day_range": [2, 5],
+    "category": "rescue",
+    "source": "第九小学楼顶",
+    "confidence": "中",
+    "title": "粉笔写下的 SOS",
+    "signal_text": "有人用镜子反光向体育馆打信号。阿晴说那是第九小学方向。",
+    "choices": [
+      {"label": "派阿晴确认", "description": "救援机会。", "type": "rescue", "cost": {"food": 1}, "reward": {"rescued": 2, "trust": 5}, "dispatch": true, "member": "a_qing", "risk": {"injury": 0.12, "missing": 0.04, "tired": 0.55}, "tags": ["school_rescue"], "log": "阿晴带回两个学生和一盒粉笔。"},
+      {"label": "广播安全路线", "description": "不派人。", "type": "broadcast", "cost": {"power": 1}, "reward": {"influence": 2}, "tags": ["school_route"], "log": "镜子反光停了一会儿，然后换成了三短三长。"},
+      {"label": "无法确认，跳过", "description": "不投入。", "type": "hide", "cost": {}, "reward": {"trust": -2}, "tags": ["school_ignored"], "log": "阳光偏过去后，反光再也看不见。"}
+    ]
+  },
+  {
+    "id": "night_music",
+    "day_range": [4, 7],
+    "category": "broadcast",
+    "source": "未知音乐台",
+    "confidence": "低",
+    "title": "夜里的老歌",
+    "signal_text": "深夜有个频段只放一首旧歌。有人在公共频道请求你转播，说这能让孩子睡着。",
+    "choices": [
+      {"label": "转播十分钟", "description": "消耗电力换取信任。", "type": "broadcast", "cost": {"power": 1}, "reward": {"trust": 4, "influence": 1}, "tags": ["music_relay"], "log": "控制室第一次没有人说话，只听那首老歌。"},
+      {"label": "改播物资清单", "description": "更实用。", "type": "broadcast", "cost": {"power": 1}, "reward": {"influence": 2, "trust": -1}, "tags": ["practical_broadcast"], "log": "你切掉音乐，读起药品和水点。有人骂你，也有人抄下地址。"},
+      {"label": "不浪费电力", "description": "保资源。", "type": "hide", "cost": {}, "reward": {"power": 1, "trust": -1}, "tags": ["music_denied"], "log": "旧歌在别人的频段里继续播放。"}
+    ]
+  },
+  {
+    "id": "settlement_roster",
+    "day_range": [1, 3],
+    "category": "member",
+    "source": "控制室白板",
+    "confidence": "高",
+    "title": "谁来守第一班",
+    "signal_text": "电台恢复后，第一件事不是对外广播，而是决定谁守频段、谁看仓库、谁照顾伤员。每个人都在等你的安排。",
+    "choices": [
+      {"label": "让沈洛守频段", "description": "电台更稳。", "type": "broadcast", "cost": {}, "reward": {"influence": 1, "power": 1}, "tags": ["shen_luo_shift"], "log": "沈洛接过耳机，把噪声调低了一格。"},
+      {"label": "让许岚先清点药品", "description": "医疗准备更好。", "type": "treat", "cost": {}, "reward": {"medicine": 1, "trust": 1}, "tags": ["xu_lan_shift"], "log": "许岚把药品分成红黄绿三排。"},
+      {"label": "让老周看仓库", "description": "资源略稳，但气氛更硬。", "type": "hide", "cost": {}, "reward": {"food": 1, "trust": -1}, "tags": ["lao_zhou_shift"], "log": "老周把仓库钥匙挂在自己腰上。"}
+    ]
+  }
+]

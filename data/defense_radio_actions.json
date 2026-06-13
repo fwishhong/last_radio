@@ -1,0 +1,38 @@
+[
+  {
+    "id": "jam",
+    "name": "干扰",
+    "battery_cost": 2,
+    "cooldown": 6.0,
+    "effect": "jam_route",
+    "duration": 4.0,
+    "risk_delta": 0
+  },
+  {
+    "id": "reroute",
+    "name": "诱导",
+    "battery_cost": 2,
+    "cooldown": 6.0,
+    "effect": "reroute_next",
+    "duration": 0.0,
+    "risk_delta": 1
+  },
+  {
+    "id": "soothe",
+    "name": "安抚广播",
+    "battery_cost": 1,
+    "cooldown": 6.0,
+    "effect": "summon_survivor",
+    "duration": 0.0,
+    "risk_delta": 1
+  },
+  {
+    "id": "overload",
+    "name": "过载脉冲",
+    "battery_cost": 3,
+    "cooldown": 6.0,
+    "effect": "base_stun",
+    "duration": 2.0,
+    "risk_delta": 0
+  }
+]

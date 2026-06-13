@@ -1,0 +1,53 @@
+[
+  {
+    "id": "turret",
+    "name": "旧式机炮",
+    "role": "damage",
+    "cost": {"scrap": 5},
+    "upgrade_cost": {"scrap": 4},
+    "max_hp": 6,
+    "repair_amount": 3,
+    "power": 1,
+    "range": 165,
+    "fire_interval": 0.75,
+    "damage": 2,
+    "targeting": "nearest"
+  },
+  {
+    "id": "barricade",
+    "name": "铁栅路障",
+    "role": "block",
+    "cost": {"scrap": 3},
+    "upgrade_cost": {"scrap": 3},
+    "max_hp": 10,
+    "repair_amount": 4,
+    "power": 0,
+    "range": 0,
+    "targeting": "none"
+  },
+  {
+    "id": "relay",
+    "name": "中继器",
+    "role": "radio",
+    "cost": {"scrap": 4},
+    "upgrade_cost": {"scrap": 4},
+    "max_hp": 5,
+    "repair_amount": 3,
+    "power": 1,
+    "range": 0,
+    "targeting": "none",
+    "radio_bonus": {"cost_reduction": 1, "duration_bonus": 1.5}
+  },
+  {
+    "id": "decoy",
+    "name": "诱饵喇叭",
+    "role": "taunt",
+    "cost": {"scrap": 4},
+    "upgrade_cost": {"scrap": 3},
+    "max_hp": 7,
+    "repair_amount": 3,
+    "power": 1,
+    "range": 120,
+    "targeting": "taunt"
+  }
+]

@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://last_signal_card"]
+
+[ext_resource type="Script" path="res://scripts/SignalCard.gd" id="1_signal"]
+
+[node name="SignalCard" type="PanelContainer"]
+custom_minimum_size = Vector2(260, 430)
+script = ExtResource("1_signal")

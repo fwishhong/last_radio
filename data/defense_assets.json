@@ -1,0 +1,43 @@
+{
+  "source": "Kenney Tower Defense Top-Down",
+  "base": {
+    "tile": 204,
+    "path": "res://assets/vendor/kenney_tower_defense_topdown/PNG/Default size/towerDefense_tile204.png",
+    "scale": 1.55
+  },
+  "build_point": {
+    "tile": 38,
+    "path": "res://assets/vendor/kenney_tower_defense_topdown/PNG/Default size/towerDefense_tile038.png",
+    "scale": 1.05
+  },
+  "turret": {
+    "tile": 292,
+    "path": "res://assets/vendor/kenney_tower_defense_topdown/PNG/Default size/towerDefense_tile292.png",
+    "scale": 1.05
+  },
+  "barricade": {
+    "tile": 228,
+    "path": "res://assets/vendor/kenney_tower_defense_topdown/PNG/Default size/towerDefense_tile228.png",
+    "scale": 1.20
+  },
+  "infected": {
+    "tile": 247,
+    "path": "res://assets/vendor/kenney_tower_defense_topdown/PNG/Default size/towerDefense_tile247.png",
+    "scale": 0.92
+  },
+  "runner": {
+    "tile": 248,
+    "path": "res://assets/vendor/kenney_tower_defense_topdown/PNG/Default size/towerDefense_tile248.png",
+    "scale": 0.88
+  },
+  "survivor_group": {
+    "tile": 246,
+    "path": "res://assets/vendor/kenney_tower_defense_topdown/PNG/Default size/towerDefense_tile246.png",
+    "scale": 0.98
+  },
+  "projectile": {
+    "tile": 272,
+    "path": "res://assets/vendor/kenney_tower_defense_topdown/PNG/Default size/towerDefense_tile272.png",
+    "scale": 0.34
+  }
+}

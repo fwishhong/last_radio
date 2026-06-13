@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://last_radio_city_map"]
+
+[ext_resource type="Script" path="res://scripts/CityMapScreen.gd" id="1_city"]
+
+[node name="CityMapScreen" type="PanelContainer"]
+custom_minimum_size = Vector2(410, 330)
+script = ExtResource("1_city")

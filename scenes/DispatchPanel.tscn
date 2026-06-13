@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://last_radio_dispatch_panel"]
+
+[ext_resource type="Script" path="res://scripts/DispatchPanel.gd" id="1_dispatch"]
+
+[node name="DispatchPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(410, 330)
+script = ExtResource("1_dispatch")

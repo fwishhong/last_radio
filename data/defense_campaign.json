@@ -1,0 +1,177 @@
+[
+  {
+    "id": "night_1",
+    "title": "第一夜：北桥求救",
+    "signal_choices": [
+      {
+        "id": "north_bridge_help",
+        "title": "北桥断续求救",
+        "raw": "北桥...孩子...楼下封住了...",
+        "description": "锁定北桥居民楼。夜里会有幸存者尝试从北线靠近，成功后信任提升。",
+        "effects": {
+          "trust": 1,
+          "survivor_route": "north_bridge",
+          "add_spawns": [
+            {"route": "north_bridge", "unit": "survivor_group", "count": 1, "interval": 1.0, "delay": 11.0}
+          ]
+        }
+      },
+      {
+        "id": "garage_battery",
+        "title": "地下车库电池箱",
+        "raw": "地下...电池...水在涨...",
+        "description": "派人标记车库电池箱。开夜时额外获得电池，但南线会被噪声吸引。",
+        "effects": {
+          "battery": 2,
+          "fuel": 1,
+          "add_spawns": [
+            {"route": "south_gate", "unit": "runner", "count": 2, "interval": 1.0, "delay": 15.0}
+          ]
+        }
+      },
+      {
+        "id": "clinic_trade",
+        "title": "诊所药品交换",
+        "raw": "仁安...药不够...愿意换食物...",
+        "description": "诊所会帮忙转发低功率信号。开夜时信任提升，暴露度略升。",
+        "effects": {
+          "trust": 3,
+          "threat": 1
+        }
+      }
+    ],
+    "starting_modifiers": {"scrap": 12, "battery": 4, "fuel": 2, "power": 4, "trust": 50},
+    "waves": [
+      {"id": "n1_a", "name": "北桥感染潮", "delay": 1.0, "spawns": [
+        {"route": "north_bridge", "unit": "infected", "count": 6, "interval": 1.15, "delay": 0.0}
+      ]},
+      {"id": "n1_b", "name": "南门试探", "delay": 13.0, "spawns": [
+        {"route": "south_gate", "unit": "runner", "count": 3, "interval": 1.1, "delay": 0.0}
+      ]},
+      {"id": "n1_c", "name": "双线余波", "delay": 24.0, "spawns": [
+        {"route": "north_bridge", "unit": "infected", "count": 5, "interval": 1.0, "delay": 0.0},
+        {"route": "service_tunnel", "unit": "infected", "count": 3, "interval": 1.2, "delay": 2.0}
+      ]}
+    ],
+    "win_reward": {"trust": 2, "battery": 1, "scrap": 2}
+  },
+  {
+    "id": "night_2",
+    "title": "第二夜：假信号与探频",
+    "signal_choices": [
+      {
+        "id": "fake_mayday",
+        "title": "重复三遍的求救",
+        "raw": "救命...救命...救命...",
+        "description": "识别录音诱饵。开夜暴露度降低，但第一波感染者更分散。",
+        "effects": {
+          "threat": -1,
+          "add_spawns": [
+            {"route": "service_tunnel", "unit": "infected", "count": 2, "interval": 1.2, "delay": 5.0}
+          ]
+        }
+      },
+      {
+        "id": "school_mirror",
+        "title": "小学楼顶反光",
+        "raw": "三短三长...第九...看见体育馆...",
+        "description": "学校幸存者会从南线靠近。救到人信任收益高，但会引来嚎叫者。",
+        "effects": {
+          "survivor_route": "south_gate",
+          "add_spawns": [
+            {"route": "south_gate", "unit": "survivor_group", "count": 1, "interval": 1.0, "delay": 14.0},
+            {"route": "south_gate", "unit": "howler", "count": 1, "interval": 1.0, "delay": 19.0}
+          ]
+        }
+      },
+      {
+        "id": "blacktower_ping",
+        "title": "黑塔车队探频",
+        "raw": "体育馆...你们听得见吗...",
+        "description": "截获黑塔探频。获得燃料，但暴露度上升，夜里会出现装甲感染者。",
+        "effects": {
+          "fuel": 2,
+          "threat": 2,
+          "add_spawns": [
+            {"route": "north_bridge", "unit": "armored", "count": 2, "interval": 2.5, "delay": 17.0}
+          ]
+        }
+      }
+    ],
+    "starting_modifiers": {"scrap": 4, "battery": 2, "fuel": 1},
+    "waves": [
+      {"id": "n2_a", "name": "南线奔跑者", "delay": 1.0, "spawns": [
+        {"route": "south_gate", "unit": "runner", "count": 5, "interval": 0.9, "delay": 0.0}
+      ]},
+      {"id": "n2_b", "name": "北桥嚎叫", "delay": 12.0, "spawns": [
+        {"route": "north_bridge", "unit": "infected", "count": 7, "interval": 0.95, "delay": 0.0},
+        {"route": "north_bridge", "unit": "howler", "count": 1, "interval": 1.0, "delay": 3.0}
+      ]},
+      {"id": "n2_c", "name": "维修通道突破", "delay": 26.0, "spawns": [
+        {"route": "service_tunnel", "unit": "infected", "count": 6, "interval": 0.9, "delay": 0.0},
+        {"route": "south_gate", "unit": "runner", "count": 4, "interval": 0.8, "delay": 2.0}
+      ]}
+    ],
+    "win_reward": {"trust": 3, "battery": 1, "scrap": 3}
+  },
+  {
+    "id": "night_3",
+    "title": "第三夜：最后广播",
+    "signal_choices": [
+      {
+        "id": "antenna_crisis",
+        "title": "楼顶天线偏转",
+        "raw": "噪声...不是信号问题...天线...",
+        "description": "冒险修正天线。开夜电池提升，过载脉冲更关键。",
+        "effects": {
+          "battery": 3,
+          "trust": 1
+        }
+      },
+      {
+        "id": "north_bridge_return",
+        "title": "北桥回报",
+        "raw": "我们到了...带了点东西...",
+        "description": "北桥幸存者带来废料，但敌群会尾随到北线。",
+        "effects": {
+          "scrap": 5,
+          "trust": 2,
+          "add_spawns": [
+            {"route": "north_bridge", "unit": "infected", "count": 5, "interval": 0.8, "delay": 7.0}
+          ]
+        }
+      },
+      {
+        "id": "clinic_followup",
+        "title": "诊所伤员名单",
+        "raw": "我们撑不到晚上...名单...",
+        "description": "转播伤员名单，获得信任，但广播会让三线同时升压。",
+        "effects": {
+          "trust": 5,
+          "threat": 2,
+          "add_spawns": [
+            {"route": "north_bridge", "unit": "howler", "count": 1, "interval": 1.0, "delay": 15.0},
+            {"route": "south_gate", "unit": "runner", "count": 3, "interval": 0.8, "delay": 18.0}
+          ]
+        }
+      }
+    ],
+    "starting_modifiers": {"scrap": 5, "battery": 2, "fuel": 1},
+    "waves": [
+      {"id": "n3_a", "name": "三线压境", "delay": 1.0, "spawns": [
+        {"route": "north_bridge", "unit": "infected", "count": 7, "interval": 0.85, "delay": 0.0},
+        {"route": "south_gate", "unit": "runner", "count": 5, "interval": 0.75, "delay": 2.0}
+      ]},
+      {"id": "n3_b", "name": "装甲感染者", "delay": 15.0, "spawns": [
+        {"route": "service_tunnel", "unit": "armored", "count": 4, "interval": 2.1, "delay": 0.0},
+        {"route": "north_bridge", "unit": "howler", "count": 2, "interval": 4.0, "delay": 1.0}
+      ]},
+      {"id": "n3_c", "name": "最后冲击", "delay": 32.0, "spawns": [
+        {"route": "north_bridge", "unit": "infected", "count": 8, "interval": 0.75, "delay": 0.0},
+        {"route": "south_gate", "unit": "runner", "count": 6, "interval": 0.65, "delay": 1.0},
+        {"route": "service_tunnel", "unit": "armored", "count": 2, "interval": 2.5, "delay": 3.0}
+      ]}
+    ],
+    "win_reward": {"trust": 8}
+  }
+]

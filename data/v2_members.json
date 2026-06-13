@@ -1,0 +1,54 @@
+[
+  {
+    "id": "shen_luo",
+    "name": "Elias Reed",
+    "role": "Radio Technician",
+    "portrait": "res://assets/new/named/survivor_radio_operator.png",
+    "skill": "监听和修理 +15；外勤受伤风险 +10。",
+    "strengths": ["radio", "repair"],
+    "weaknesses": ["field"],
+    "status": "normal",
+    "stress": 0,
+    "values": ["radio", "repair"],
+    "dispatch_count": 0
+  },
+  {
+    "id": "xu_lan",
+    "name": "Mara Vale",
+    "role": "Field Medic",
+    "portrait": "res://assets/new/named/survivor_medic.png",
+    "skill": "医疗和救援 +15；连续忽视救援会降低信任。",
+    "strengths": ["medical", "rescue"],
+    "weaknesses": ["trade"],
+    "status": "normal",
+    "stress": 0,
+    "values": ["rescue", "medical"],
+    "dispatch_count": 0
+  },
+  {
+    "id": "lao_zhou",
+    "name": "Victor Hale",
+    "role": "Quartermaster",
+    "portrait": "res://assets/new/named/survivor_scavenger.png",
+    "skill": "交易和物资估算 +15；外部信任增长较慢。",
+    "strengths": ["trade", "supply"],
+    "weaknesses": ["rescue"],
+    "status": "normal",
+    "stress": 0,
+    "values": ["trade", "supply"],
+    "dispatch_count": 0
+  },
+  {
+    "id": "a_qing",
+    "name": "Nora Quinn",
+    "role": "Pathfinder Mechanic",
+    "portrait": "res://assets/new/named/survivor_mechanic.png",
+    "skill": "外勤和带路 +15；连续外勤会疲惫。",
+    "strengths": ["field", "rescue"],
+    "weaknesses": ["repair"],
+    "status": "normal",
+    "stress": 0,
+    "values": ["field", "rescue"],
+    "dispatch_count": 0
+  }
+]

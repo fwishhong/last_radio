@@ -1,0 +1,27 @@
+[
+  {
+    "id": "wave_1",
+    "name": "北桥感染潮",
+    "delay": 1.0,
+    "spawns": [
+      {"route": "north_bridge", "unit": "infected", "count": 6, "interval": 1.2, "delay": 0.0}
+    ]
+  },
+  {
+    "id": "wave_2",
+    "name": "南门奔跑者",
+    "delay": 10.0,
+    "spawns": [
+      {"route": "south_gate", "unit": "runner", "count": 4, "interval": 1.0, "delay": 0.0}
+    ]
+  },
+  {
+    "id": "wave_3",
+    "name": "双线压境",
+    "delay": 24.0,
+    "spawns": [
+      {"route": "north_bridge", "unit": "infected", "count": 8, "interval": 1.0, "delay": 0.0},
+      {"route": "south_gate", "unit": "runner", "count": 3, "interval": 1.1, "delay": 2.0}
+    ]
+  }
+]

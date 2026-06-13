@@ -1,0 +1,34 @@
+[
+  {
+    "id": "medkit",
+    "name": "医疗包",
+    "icon": "res://assets/reused/icon_medkit.png",
+    "tags": ["medical", "rescue"],
+    "bonus": 15,
+    "count": 2
+  },
+  {
+    "id": "crowbar",
+    "name": "撬棍",
+    "icon": "res://assets/reused/icon_scrap.png",
+    "tags": ["supply", "field"],
+    "bonus": 12,
+    "count": 1
+  },
+  {
+    "id": "battery",
+    "name": "电池组",
+    "icon": "res://assets/reused/icon_battery_pack.png",
+    "tags": ["radio", "repair"],
+    "bonus": 12,
+    "count": 1
+  },
+  {
+    "id": "radio",
+    "name": "对讲机",
+    "icon": "res://assets/reused/icon_radio_parts.png",
+    "tags": ["radio", "field"],
+    "bonus": 10,
+    "count": 1
+  }
+]
