@@ -224,6 +224,12 @@ var fx_dawn_alpha: float = 0.0
 var fx_dawn_target: float = 0.0
 const DAWN_FADE_DURATION := 1.5
 
+# Footstep dust: small puffs kicked up at the player's feet every
+# FOOTSTEP_INTERVAL seconds while moving. Cheap — each puff is 2-3 short-
+# life particles with downward gravity.
+var fx_footstep_accum: float = 0.0
+const FOOTSTEP_INTERVAL := 0.28
+
 # ============================================================================
 # LIFECYCLE
 # ============================================================================
@@ -1688,6 +1694,28 @@ func _fx_tick(delta: float) -> void:
 	# Dawn fade: smoothly chase the target alpha (0 normally, set by
 	# _end_night to 1 on success so the report screen fades in).
 	fx_dawn_alpha = lerp(fx_dawn_alpha, fx_dawn_target, min(1.0, delta / DAWN_FADE_DURATION))
+
+	# Footstep dust — only when the player is actually moving this frame.
+	# Walking on carpet (inside the stadium) kicks up very little; the
+	# stadium floor is dusty so a few specks reads as physicality without
+	# covering the screen.
+	if player_is_moving:
+		fx_footstep_accum += delta
+		while fx_footstep_accum >= FOOTSTEP_INTERVAL:
+			fx_footstep_accum -= FOOTSTEP_INTERVAL
+			var foot: Vector2 = player_pos + Vector2(0.0, 14.0)
+			Fx.spawn_particle(
+				fx_particles, foot, Vector2(-6.0 + randf() * 12.0, -10.0 - randf() * 8.0),
+				0.35, Color(0.7, 0.62, 0.5, 0.6), 1.6, Fx.PARTICLE_KIND_DOT, 90.0
+			)
+			Fx.spawn_particle(
+				fx_particles, foot, Vector2(-4.0 + randf() * 8.0, -6.0 - randf() * 4.0),
+				0.28, Color(0.75, 0.68, 0.55, 0.5), 1.2, Fx.PARTICLE_KIND_DOT, 80.0
+			)
+	else:
+		# Drain the accumulator while idle so the first step after a long
+		# pause doesn't immediately spit a cloud of dust.
+		fx_footstep_accum = max(0.0, fx_footstep_accum - delta)
 
 	# Threat arrows: build the arrow list fresh each frame. An arrow appears
 	# for each assaulting hotspot that's either off-screen or beyond an
