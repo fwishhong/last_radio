@@ -212,6 +212,18 @@ var fx_threat_arrows: Array = []  # [{pos, strength, color}, ...] — owned by f
 # Threat arrow pulse phase, advanced each frame.
 var fx_threat_phase: float = 0.0
 
+# Radio static overlay: when the radio is active AND tuned to the static
+# channel, draw a procedural noise band over the screen so the player
+# feels the "wrong station" without having to read the channel label.
+var fx_static_alpha: float = 0.0  # current overlay alpha (animated)
+var fx_static_target: float = 0.0  # target alpha (0 or 0.55, lerp toward this)
+
+# Dawn fade transition: triggered at the end of a successful night, fades
+# the screen toward the report screen over DAWN_FADE_DURATION seconds.
+var fx_dawn_alpha: float = 0.0
+var fx_dawn_target: float = 0.0
+const DAWN_FADE_DURATION := 1.5
+
 # ============================================================================
 # LIFECYCLE
 # ============================================================================
@@ -1665,6 +1677,18 @@ func _fx_tick(delta: float) -> void:
 	if fx_critical_overlay:
 		fx_critical_overlay.color.a = fx_critical_alpha
 
+	# Radio static overlay: fade in when the player is tuned to the static
+	# channel while the radio is active. Fade out otherwise. The actual
+	# noise pattern is drawn by fx_layer in its _draw().
+	fx_static_target = 0.0
+	if radio_available and not radio_completed and radio_tuned_channel == "static":
+		fx_static_target = 0.55
+	fx_static_alpha = lerp(fx_static_alpha, fx_static_target, min(1.0, delta * 5.0))
+
+	# Dawn fade: smoothly chase the target alpha (0 normally, set by
+	# _end_night to 1 on success so the report screen fades in).
+	fx_dawn_alpha = lerp(fx_dawn_alpha, fx_dawn_target, min(1.0, delta / DAWN_FADE_DURATION))
+
 	# Threat arrows: build the arrow list fresh each frame. An arrow appears
 	# for each assaulting hotspot that's either off-screen or beyond an
 	# arrow-distance threshold from the player. Strength scales with how
@@ -1694,6 +1718,7 @@ func _fx_tick(delta: float) -> void:
 	# Push the latest threat-arrow list to the fx layer so it can render.
 	if fx_layer:
 		fx_layer._fx_set_threat_arrows(fx_threat_arrows, fx_threat_phase)
+		fx_layer._fx_set_overlays(fx_static_alpha, fx_dawn_alpha)
 		fx_layer._fx_mark_dirty()
 
 
@@ -2331,6 +2356,10 @@ func _end_night(success: bool) -> void:
 	phase = "night_report"
 	survived = success
 	_play_sfx("unlock" if success else "fail")
+	# Dawn fade: only on success — a failed night shouldn't get the warm
+	# sunrise, the player needs to feel the failure state.
+	if success:
+		fx_dawn_target = 1.0
 
 	# Apply night success/failure unlocks
 	var night_def: Dictionary = data.get_night(night_index)

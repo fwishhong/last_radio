@@ -19,6 +19,8 @@ var _shake_state: Dictionary = {"amount": 0.0, "decay": 6.0, "freq": 28.0, "phas
 var _hotspot_positions: Dictionary = {}  # id -> Vector2
 var _threat_arrows: Array = []
 var _threat_phase: float = 0.0
+var _static_alpha: float = 0.0
+var _dawn_alpha: float = 0.0
 
 
 func _fx_set_refs(particles: Array, telegraphs: Array, shake_state: Dictionary, hotspot_positions: Dictionary) -> void:
@@ -31,6 +33,11 @@ func _fx_set_refs(particles: Array, telegraphs: Array, shake_state: Dictionary, 
 func _fx_set_threat_arrows(arrows: Array, phase: float) -> void:
     _threat_arrows = arrows
     _threat_phase = phase
+
+
+func _fx_set_overlays(static_alpha: float, dawn_alpha: float) -> void:
+    _static_alpha = static_alpha
+    _dawn_alpha = dawn_alpha
 
 
 # Called by the game whenever positions / counts change. Avoids stale cache.
@@ -72,6 +79,10 @@ func _draw() -> void:
         draw_rect(Rect2(cx - bar_w * 0.5, cy + bar_h + 4.0, bar_w, bar_w), Color(1, 0.8, 0.3, alpha))
     # Off-screen threat arrows. Drawn last so they overlay particles + rings.
     _draw_threat_arrows(offset)
+    # Static noise overlay — when radio is tuned to static channel.
+    _draw_static_noise(offset)
+    # Dawn fade — drawn last so it overlays everything.
+    _draw_dawn_fade()
 
 
 func _draw_threat_arrows(offset: Vector2) -> void:
@@ -124,3 +135,63 @@ func _draw_threat_arrows(offset: Vector2) -> void:
         # Soft halo behind for legibility on any background.
         var halo := Color(0.0, 0.0, 0.0, 0.4 * strength)
         draw_colored_polygon(PackedVector2Array([tip + dir * 2.0, base_a + perp * 2.0, base_b - perp * 2.0]), halo)
+
+
+func _draw_static_noise(offset: Vector2) -> void:
+    if _static_alpha <= 0.01:
+        return
+    # Procedural static — horizontal scanlines with random brightness. Two
+    # color tones (cool blue / warm white) sampled per band give a noisy
+    # feeling without needing a noise texture asset.
+    var bands: int = 36
+    var band_h: float = SCREEN_SIZE.y / float(bands)
+    for i in bands:
+        var y: float = float(i) * band_h
+        # Pseudo-random brightness seeded by band index + frame phase so it
+        # shifts subtly without flickering too fast.
+        var seed: float = float(i) * 7.31 + _threat_phase * 1.7
+        var brightness: float = 0.5 + 0.5 * sin(seed) * 0.5 + 0.5 * cos(seed * 1.7 + 1.3) * 0.5
+        var tone: float = fmod(seed * 0.317, 1.0)
+        var color := Color(
+            0.55 + 0.25 * tone,
+            0.55 + 0.25 * (1.0 - tone),
+            0.7 + 0.15 * brightness,
+            _static_alpha * (0.35 + 0.45 * brightness)
+        )
+        draw_rect(Rect2(0.0, y, SCREEN_SIZE.x, band_h), color)
+    # Scanline darken — horizontal stripes every 4px to evoke CRT.
+    var stripe_h: float = 4.0
+    var n_stripes: int = int(SCREEN_SIZE.y / stripe_h)
+    for j in n_stripes:
+        if j % 2 == 0:
+            continue
+        draw_rect(
+            Rect2(0.0, float(j) * stripe_h, SCREEN_SIZE.x, stripe_h),
+            Color(0.0, 0.0, 0.0, _static_alpha * 0.25)
+        )
+
+
+func _draw_dawn_fade() -> void:
+    if _dawn_alpha <= 0.001:
+        return
+    # A warm dawn gradient — bottom-heavy yellow / amber that fades to
+    # transparent at the top, conveying sunrise creeping in.
+    var bands: int = 18
+    var band_h: float = SCREEN_SIZE.y / float(bands)
+    for i in bands:
+        var y: float = float(i) * band_h
+        # Fade out toward the top so the dawn is anchored to the bottom of
+        # the screen. Band 0 = bottom, band bands-1 = top.
+        var t: float = float(bands - 1 - i) / float(bands - 1)
+        var alpha_factor: float = pow(t, 1.4)
+        var color := Color(
+            0.95,
+            0.78 + 0.18 * t,
+            0.5 + 0.4 * t,
+            _dawn_alpha * alpha_factor * 0.85
+        )
+        draw_rect(Rect2(0.0, y, SCREEN_SIZE.x, band_h), color)
+    # White flash overlay (the moment of sunrise)
+    if _dawn_alpha > 0.5:
+        var flash_alpha: float = (_dawn_alpha - 0.5) * 0.6
+        draw_rect(Rect2(0.0, 0.0, SCREEN_SIZE.x, SCREEN_SIZE.y), Color(1.0, 0.95, 0.85, flash_alpha))
