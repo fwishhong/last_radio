@@ -1,0 +1,199 @@
+{
+  "version": 2,
+  "chapter_id": "chapter_01",
+  "title": "旧体育馆守夜",
+  "nights": [
+    {
+      "id": "night_01",
+      "number": 1,
+      "title": "三盏灯",
+      "duration": 60,
+      "learning_goal": "学习移动、修复、状态圈、横条和天亮目标。",
+      "unlocked_hotspots": ["front_door", "left_window", "generator"],
+      "day_cards": ["start"],
+      "fixed_events": [
+        {"id": "front_door_warning", "time": 4, "type": "warning", "target": "front_door"},
+        {"id": "front_door_assault", "time": 7, "type": "assault", "target": "front_door", "pressure": 2.2},
+        {"id": "generator_flicker_1", "time": 13, "type": "support", "target": "generator", "pressure": 0.55},
+        {"id": "left_window_warning", "time": 18, "type": "warning", "target": "left_window"},
+        {"id": "left_window_assault", "time": 21, "type": "assault", "target": "left_window", "pressure": 2.0},
+        {"id": "front_door_second", "time": 28, "type": "assault", "target": "front_door", "pressure": 2.0},
+        {"id": "generator_flicker_2", "time": 34, "type": "support", "target": "generator", "pressure": 0.55},
+        {"id": "left_window_second", "time": 41, "type": "assault", "target": "left_window", "pressure": 1.9},
+        {"id": "front_door_third", "time": 48, "type": "assault", "target": "front_door", "pressure": 2.1},
+        {"id": "generator_flicker_3", "time": 54, "type": "support", "target": "generator", "pressure": 0.6}
+      ],
+      "success_unlocks": ["nora", "right_window"],
+      "resource_stage": "hidden",
+      "radio_channels": null,
+      "radio_target_channel": null
+    },
+    {
+      "id": "night_02",
+      "number": 2,
+      "title": "右窗的人",
+      "duration": 120,
+      "learning_goal": "学习 Nora 辅助和双窗口压力。",
+      "unlocked_hotspots": ["front_door", "left_window", "right_window", "generator"],
+      "day_cards": ["door_reinforce", "window_brace", "battery_buffer"],
+      "fixed_events": [
+        {"id": "right_window_warning", "time": 24, "type": "warning", "target": "right_window"},
+        {"id": "right_window_assault", "time": 30, "type": "assault", "target": "right_window", "pressure": 4.8},
+        {"id": "left_window_echo", "time": 72, "type": "warning", "target": "left_window"}
+      ],
+      "success_unlocks": ["radio"],
+      "resource_stage": "hidden"
+    },
+    {
+      "id": "night_03",
+      "number": 3,
+      "title": "接住声音",
+      "duration": 180,
+      "learning_goal": "学习在电台目标和门窗生存之间取舍。",
+      "unlocked_hotspots": ["front_door", "left_window", "right_window", "generator", "radio"],
+      "day_cards": ["generator_tune", "radio_booster", "workbench"],
+      "fixed_events": [
+        {"id": "radio_call", "time": 28, "type": "radio", "target": "radio"},
+        {"id": "generator_flicker", "time": 42, "type": "support", "target": "generator", "pressure": 1.0},
+        {"id": "late_window_push", "time": 78, "type": "assault", "target": "left_window", "pressure": 3.4}
+      ],
+      "success_unlocks": ["elias", "antenna"],
+      "resource_stage": "mentioned",
+      "radio_channels": [
+        {"id": "victor", "label": "Victor", "desc": "熟悉的声音，他在测试频道"},
+        {"id": "elias", "label": "Elias", "desc": "新人 Elias 的微弱信号"},
+        {"id": "static", "label": "干扰", "desc": "只有噪声，没人在说话"}
+      ],
+      "radio_target_channel": "elias"
+    },
+    {
+      "id": "night_04",
+      "number": 4,
+      "title": "屋顶的线",
+      "duration": 180,
+      "learning_goal": "学习天线和电台的依赖关系。",
+      "unlocked_hotspots": ["front_door", "left_window", "right_window", "generator", "radio", "antenna"],
+      "day_cards": ["antenna_anchor", "storage", "medbay"],
+      "fixed_events": [
+        {"id": "antenna_warning", "time": 20, "type": "support", "target": "antenna", "pressure": 1.2},
+        {"id": "antenna_drop", "time": 48, "type": "support", "target": "antenna", "pressure": 1.6},
+        {"id": "radio_call_2", "time": 58, "type": "radio", "target": "radio"}
+      ],
+      "success_unlocks": ["day_action_cards"],
+      "resource_stage": "mentioned",
+      "radio_channels": [
+        {"id": "victor", "label": "Victor", "desc": "他在确认坐标"},
+        {"id": "elias", "label": "Elias", "desc": "在测试新天线"},
+        {"id": "static", "label": "干扰", "desc": "有人在反向扫描"}
+      ],
+      "radio_target_channel": "victor"
+    },
+    {
+      "id": "night_05",
+      "number": 5,
+      "title": "白天不安全",
+      "duration": 180,
+      "learning_goal": "学习白天加固、搜救、搜刮、广播会改变夜晚。",
+      "unlocked_hotspots": ["front_door", "left_window", "right_window", "generator", "radio", "antenna"],
+      "day_cards": ["generator_tune", "rescue_bleachers", "storage_sweep", "open_route", "keep_silent"],
+      "fixed_events": [
+        {"id": "choice_consequence", "time": 16, "type": "conditional", "target": "day_choice"},
+        {"id": "antenna_late", "time": 92, "type": "support", "target": "antenna", "pressure": 1.6},
+        {"id": "late_push", "time": 104, "type": "director", "target": "barrier"}
+      ],
+      "success_unlocks": ["back_door"],
+      "resource_stage": "visible"
+    },
+    {
+      "id": "night_06",
+      "number": 6,
+      "title": "器材通道",
+      "duration": 180,
+      "learning_goal": "学习后门和发电机区域联动。",
+      "unlocked_hotspots": ["front_door", "left_window", "right_window", "back_door", "generator", "radio", "antenna"],
+      "day_cards": ["back_door_bar", "generator_cage", "runner_path", "storage_sweep"],
+      "fixed_events": [
+        {"id": "back_door_warning", "time": 36, "type": "warning", "target": "back_door"},
+        {"id": "back_door_assault", "time": 54, "type": "assault", "target": "back_door", "pressure": 5.6},
+        {"id": "generator_drag", "time": 76, "type": "support", "target": "generator", "pressure": 1.4}
+      ],
+      "success_unlocks": ["medbay"],
+      "resource_stage": "visible"
+    },
+    {
+      "id": "night_07",
+      "number": 7,
+      "title": "医务角的灯",
+      "duration": 180,
+      "learning_goal": "学习不会立刻失败的软压力和药品/信任。",
+      "unlocked_hotspots": ["front_door", "left_window", "right_window", "back_door", "generator", "radio", "antenna", "medbay"],
+      "day_cards": ["medbay_lamp", "nora_kit", "quiet_hours", "rescue_bleachers"],
+      "fixed_events": [
+        {"id": "medbay_call", "time": 54, "type": "support", "target": "medbay", "pressure": 1.4},
+        {"id": "window_pair", "time": 82, "type": "assault", "target": "windows", "pressure": 3.6}
+      ],
+      "success_unlocks": ["storage"],
+      "resource_stage": "medicine_trust"
+    },
+    {
+      "id": "night_08",
+      "number": 8,
+      "title": "最后一块板",
+      "duration": 180,
+      "learning_goal": "学习仓库和木板资源。",
+      "unlocked_hotspots": ["front_door", "left_window", "right_window", "back_door", "generator", "radio", "antenna", "medbay", "storage"],
+      "day_cards": ["salvage_planks", "double_brace", "victor_cache", "open_route"],
+      "fixed_events": [
+        {"id": "storage_shortage", "time": 44, "type": "support", "target": "storage", "pressure": 1.5},
+        {"id": "hard_push", "time": 96, "type": "director", "target": "barrier"},
+        {"id": "late_storage", "time": 128, "type": "support", "target": "storage", "pressure": 1.2}
+      ],
+      "success_unlocks": ["exposure_backlash"],
+      "resource_stage": "plank_stock"
+    },
+    {
+      "id": "night_09",
+      "number": 9,
+      "title": "有人在追信号",
+      "duration": 180,
+      "learning_goal": "学习暴露度反噬，以及电力、天线、电台链条。",
+      "unlocked_hotspots": ["front_door", "left_window", "right_window", "back_door", "generator", "radio", "antenna", "medbay", "storage"],
+      "day_cards": ["signal_battery", "cable_route", "elias_tools", "keep_silent"],
+      "fixed_events": [
+        {"id": "antenna_blackout_link", "time": 72, "type": "support", "target": "antenna", "pressure": 1.8},
+        {"id": "radio_call_3", "time": 82, "type": "radio", "target": "radio"},
+        {"id": "exposure_wave", "time": 118, "type": "conditional", "target": "exposure"}
+      ],
+      "success_unlocks": ["final_night"],
+      "resource_stage": "exposure_main",
+      "radio_channels": [
+        {"id": "victor", "label": "Victor", "desc": "在交代最后几条坐标"},
+        {"id": "elias", "label": "Elias", "desc": "在帮 Victor 守频率"},
+        {"id": "static", "label": "干扰", "desc": "追踪者开始反向扫描"}
+      ],
+      "radio_target_channel": "victor"
+    },
+    {
+      "id": "night_10",
+      "number": 10,
+      "title": "名单",
+      "duration": 180,
+      "learning_goal": "综合考验全部系统，完成第一章最终广播。",
+      "unlocked_hotspots": ["front_door", "left_window", "right_window", "back_door", "generator", "radio", "antenna", "medbay", "storage"],
+      "day_cards": ["final_barricade", "all_hands", "radio_beacon", "keep_silent"],
+      "fixed_events": [
+        {"id": "opening_probe", "time": 28, "type": "director", "target": "barrier"},
+        {"id": "final_broadcast", "time": 82, "type": "radio", "target": "radio"},
+        {"id": "final_wave", "time": 124, "type": "assault_all", "target": "barriers", "pressure": 7.0}
+      ],
+      "success_unlocks": ["chapter_01_complete"],
+      "resource_stage": "final",
+      "radio_channels": [
+        {"id": "victor", "label": "Victor", "desc": "他在播报名单"},
+        {"id": "elias", "label": "Elias", "desc": "在同步坐标"},
+        {"id": "static", "label": "干扰", "desc": "追踪者压过来"}
+      ],
+      "radio_target_channel": "victor"
+    }
+  ]
+}

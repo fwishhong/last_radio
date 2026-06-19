@@ -1,157 +1,210 @@
-﻿extends RefCounted
-class_name NightShiftSave
+﻿class_name NightShiftSave
+extends RefCounted
+# Multi-slot save/load. 3 slots, each is a separate file:
+#   user://saves/slot_1.json
+#   user://saves/slot_2.json
+#   user://saves/slot_3.json
+# Each file contains: night_index, resources, upgrades, allies, unlocked_hotspots,
+#                     radio_available, radio_completed, radio_missed, blackout,
+#                     radio_contact_goal, radio_window_left, radio_tuned_channel,
+#                     radio_contacts_made, tutorial_done, difficulty, ng_plus_count.
+# Plus a version + timestamp.
+# v3: adds tutorial_done, difficulty, ng_plus_count. v2 saves (single-slot
+#     under last_radio_chapter_01.json) are auto-migrated to slot 1 on first
+#     read via `migrate_legacy_if_needed()`.
 
-const SAVE_FILE_PREFIX := "user://night_shift_save_"
+const SAVE_DIR := "user://saves"
+const LEGACY_SAVE_PATH := SAVE_DIR + "/last_radio_chapter_01.json"  # v2 single-slot
+const SLOT_COUNT := 3
+const SAVE_VERSION := 3
 
-static func save(game: Node, slot: int = 0) -> bool:
-	var data := _collect_state(game)
-	var path := "%s%03d.json" % [SAVE_FILE_PREFIX, slot]
+# Difficulty: 0 = normal, 1 = hard. Stored per-slot.
+const DIFFICULTY_NORMAL := 0
+const DIFFICULTY_HARD := 1
+
+
+# ---------- per-slot paths ----------
+
+static func slot_path(slot: int) -> String:
+	return "%s/slot_%d.json" % [SAVE_DIR, slot]
+
+
+# ---------- public API ----------
+
+static func has_save() -> bool:
+	# Used by old code. Now means "any slot has data". Prefer has_slot for new code.
+	return has_any_slot()
+
+
+static func has_any_slot() -> bool:
+	for s in range(1, SLOT_COUNT + 1):
+		if _slot_exists(s):
+			return true
+	return false
+
+
+static func has_slot(slot: int) -> bool:
+	return _slot_exists(slot)
+
+
+static func write(state: Dictionary, slot: int = 1) -> bool:
+	if slot < 1 or slot > SLOT_COUNT:
+		push_error("NightShiftSave: invalid slot %d" % slot)
+		return false
+	_ensure_save_dir()
+	var path := slot_path(slot)
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
+		push_error("NightShiftSave cannot open for write: %s" % path)
 		return false
-	var json_text := JSON.stringify(data, "\t", false)
-	file.store_string(json_text)
+	var body := _build_body(state)
+	file.store_string(JSON.stringify(body, "  "))
 	file.close()
 	return true
 
-static func load(game: Node, slot: int = 0) -> bool:
-	var path := "%s%03d.json" % [SAVE_FILE_PREFIX, slot]
-	if not FileAccess.file_exists(path):
-		return false
+
+static func read(slot: int = 1) -> Dictionary:
+	if slot < 1 or slot > SLOT_COUNT:
+		return {}
+	if not _slot_exists(slot):
+		return {}
+	var path := slot_path(slot)
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
-		return false
-	var json_text := file.get_as_text()
+		return {}
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
 	file.close()
-	var json := JSON.new()
-	var err := json.parse(json_text)
-	if err != OK:
-		return false
-	var data: Dictionary = json.data
-	return _restore_state(game, data)
+	if not parsed is Dictionary:
+		return {}
+	var doc: Dictionary = parsed
+	if int(doc.get("version", 0)) != SAVE_VERSION:
+		push_warning("NightShiftSave: save version mismatch in slot %d (have %s, want %s)" % [slot, doc.get("version", 0), SAVE_VERSION])
+		return {}
+	return doc
 
-static func has_save(slot: int) -> bool:
-	var path := "%s%03d.json" % [SAVE_FILE_PREFIX, slot]
-	return FileAccess.file_exists(path)
 
-static func delete_save(slot: int) -> void:
-	var path := "%s%03d.json" % [SAVE_FILE_PREFIX, slot]
+static func clear_save() -> void:
+	# Used by old code. Now clears all slots.
+	clear_all_slots()
+
+
+static func clear_slot(slot: int) -> void:
+	if slot < 1 or slot > SLOT_COUNT:
+		return
+	var path := slot_path(slot)
 	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(path)
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
-static func list_saves() -> Array[int]:
-	var result: Array[int] = []
-	var dir := DirAccess.open("user://")
-	if dir == null:
-		return result
-	dir.list_dir_begin()
-	var file_name := dir.get_next()
-	while file_name != "":
-		if file_name.begins_with("night_shift_save_"):
-			var suffix := file_name.trim_prefix("night_shift_save_").trim_suffix(".json")
-			if suffix.is_valid_int():
-				result.append(int(suffix))
-		file_name = dir.get_next()
-	dir.list_dir_end()
-	result.sort()
-	return result
 
-static func _collect_state(game: Node) -> Dictionary:
+static func clear_all_slots() -> void:
+	for s in range(1, SLOT_COUNT + 1):
+		clear_slot(s)
+
+
+# Quick summary of a slot for the cover screen (no full read needed).
+static func slot_summary(slot: int) -> Dictionary:
+	# Returns:
+	#   {exists: bool, night_index: int, saved_at: int, difficulty: int, ng_plus: int}
+	if not _slot_exists(slot):
+		return {"exists": false, "night_index": -1, "saved_at": 0, "difficulty": DIFFICULTY_NORMAL, "ng_plus": 0}
+	var file := FileAccess.open(slot_path(slot), FileAccess.READ)
+	if file == null:
+		return {"exists": false, "night_index": -1, "saved_at": 0, "difficulty": DIFFICULTY_NORMAL, "ng_plus": 0}
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if not parsed is Dictionary:
+		return {"exists": false, "night_index": -1, "saved_at": 0, "difficulty": DIFFICULTY_NORMAL, "ng_plus": 0}
 	return {
-		"version": 1,
-		"phase": game.get("phase"),
-		"current_level_index": game.get("current_level_index"),
-		"night_elapsed": game.get("night_elapsed"),
-		"blackout": game.get("blackout"),
-		"radio_available": game.get("radio_available"),
-		"radio_missed": game.get("radio_missed"),
-		"radio_completed": game.get("radio_completed"),
-		"radio_call_started_at": game.get("radio_call_started_at"),
-		"radio_contacts_done": game.get("radio_contacts_done"),
-		"game_over": game.get("game_over"),
-		"outcome": game.get("outcome"),
-		"last_night_success": game.get("last_night_success"),
-		"first_door_hint_done": game.get("first_door_hint_done"),
-		"plank_cooldown": game.get("plank_cooldown"),
-		"director_event_count": game.get("director_event_count"),
-		"night_seed": game.get("night_seed"),
-		"allies": game.get("allies").duplicate(),
-		"upgrades": game.get("upgrades").duplicate(),
-		"events_done": game.get("events_done").duplicate(),
-		"player_pos": {"x": game.get("player_pos").x, "y": game.get("player_pos").y},
-		"player_target_id": game.get("player_target_id"),
-		"nora_pos": {"x": game.get("nora_pos").x, "y": game.get("nora_pos").y},
-		"nora_target_id": game.get("nora_target_id"),
-		"elias_pos": {"x": game.get("elias_pos").x, "y": game.get("elias_pos").y},
-		"elias_target_id": game.get("elias_target_id"),
-		"hotspots": _collect_hotspots(game),
-		"logs": game.get("logs").duplicate()
+		"exists": true,
+		"night_index": int((parsed as Dictionary).get("night_index", 0)),
+		"saved_at": int((parsed as Dictionary).get("saved_at", 0)),
+		"difficulty": int((parsed as Dictionary).get("difficulty", DIFFICULTY_NORMAL)),
+		"ng_plus": int((parsed as Dictionary).get("ng_plus_count", 0)),
 	}
 
-static func _collect_hotspots(game: Node) -> Dictionary:
-	var raw: Dictionary = game.get("hotspots", {})
-	var result := {}
-	for key in raw.keys():
-		var h: Dictionary = raw[key]
-		result[key] = {
-			"value": h.get("value", 100.0),
-			"pressure": h.get("pressure", 0.0),
-			"active": h.get("active", false),
-			"assault": h.get("assault", false),
-			"warning": h.get("warning", false),
-			"braced": h.get("braced", false),
-			"temp_seal": h.get("temp_seal", 0.0),
-			"breach_timer": h.get("breach_timer", -1.0)
-		}
-	return result
 
-static func _restore_state(game: Node, data: Dictionary) -> bool:
-	if int(data.get("version", 0)) < 1:
+# Migration: if a v2 single-slot save exists and all v3 slots are empty,
+# move the v2 save into slot 1.
+static func migrate_legacy_if_needed() -> void:
+	if not FileAccess.file_exists(LEGACY_SAVE_PATH):
+		return
+	# Only migrate if slot 1 is empty
+	if _slot_exists(1):
+		return
+	# Read the v2 save
+	var file := FileAccess.open(LEGACY_SAVE_PATH, FileAccess.READ)
+	if file == null:
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if not parsed is Dictionary:
+		return
+	var doc: Dictionary = parsed
+	if int(doc.get("version", 0)) != 2:
+		return
+	# v2 has the same shape as v3 minus tutorial_done / difficulty / ng_plus_count.
+	# Default those to 0/false.
+	doc["version"] = SAVE_VERSION
+	doc["tutorial_done"] = bool(doc.get("tutorial_done", false))
+	doc["difficulty"] = int(doc.get("difficulty", DIFFICULTY_NORMAL))
+	doc["ng_plus_count"] = int(doc.get("ng_plus_count", 0))
+	# Write to slot 1
+	if not DirAccess.dir_exists_absolute(SAVE_DIR):
+		var d := DirAccess.open(SAVE_DIR)
+		if d == null:
+			d = DirAccess.open("user://")
+		if d != null:
+			d.make_dir_recursive("saves")
+	var out := FileAccess.open(slot_path(1), FileAccess.WRITE)
+	if out != null:
+		out.store_string(JSON.stringify(doc, "  "))
+		out.close()
+		# Remove the legacy file
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(LEGACY_SAVE_PATH))
+
+
+# ---------- internals ----------
+
+static func _build_body(state: Dictionary) -> Dictionary:
+	return {
+		"version": SAVE_VERSION,
+		"saved_at": Time.get_unix_time_from_system(),
+		"night_index": int(state.get("night_index", 0)),
+		"resources": state.get("resources", {}),
+		"upgrades": state.get("upgrades", {}),
+		"allies": state.get("allies", {}),
+		"unlocked_hotspots": state.get("unlocked_hotspots", []),
+		"radio_available": bool(state.get("radio_available", false)),
+		"radio_completed": bool(state.get("radio_completed", false)),
+		"radio_missed": bool(state.get("radio_missed", false)),
+		"blackout": bool(state.get("blackout", false)),
+		"radio_contact_goal": int(state.get("radio_contact_goal", 1)),
+		"radio_window_left": float(state.get("radio_window_left", 0.0)),
+		"radio_tuned_channel": str(state.get("radio_tuned_channel", "")),
+		"radio_contacts_made": int(state.get("radio_contacts_made", 0)),
+		"tutorial_done": bool(state.get("tutorial_done", false)),
+		"difficulty": int(state.get("difficulty", DIFFICULTY_NORMAL)),
+		"ng_plus_count": int(state.get("ng_plus_count", 0)),
+	}
+
+
+static func _slot_exists(slot: int) -> bool:
+	if slot < 1 or slot > SLOT_COUNT:
 		return false
-	game.set("phase", data.get("phase", "day"))
-	game.set("current_level_index", data.get("current_level_index", 0))
-	game.set("night_elapsed", data.get("night_elapsed", 0.0))
-	game.set("blackout", data.get("blackout", false))
-	game.set("radio_available", data.get("radio_available", false))
-	game.set("radio_missed", data.get("radio_missed", false))
-	game.set("radio_completed", data.get("radio_completed", false))
-	game.set("radio_call_started_at", data.get("radio_call_started_at", -1.0))
-	game.set("radio_contacts_done", data.get("radio_contacts_done", 0))
-	game.set("game_over", data.get("game_over", false))
-	game.set("outcome", data.get("outcome", ""))
-	game.set("last_night_success", data.get("last_night_success", false))
-	game.set("first_door_hint_done", data.get("first_door_hint_done", false))
-	game.set("plank_cooldown", data.get("plank_cooldown", 0.0))
-	game.set("director_event_count", data.get("director_event_count", 0))
-	game.set("night_seed", data.get("night_seed", 0))
-	game.set("player_pos", Vector2(data.get("player_pos", {}).get("x", 0.0), data.get("player_pos", {}).get("y", 0.0)))
-	game.set("player_target_id", data.get("player_target_id", ""))
-	game.set("nora_pos", Vector2(data.get("nora_pos", {}).get("x", 0.0), data.get("nora_pos", {}).get("y", 0.0)))
-	game.set("nora_target_id", data.get("nora_target_id", ""))
-	game.set("elias_pos", Vector2(data.get("elias_pos", {}).get("x", 0.0), data.get("elias_pos", {}).get("y", 0.0)))
-	game.set("elias_target_id", data.get("elias_target_id", ""))
-	game.set("upgrades", data.get("upgrades", {}).duplicate())
-	game.set("events_done", data.get("events_done", {}).duplicate())
-	game.set("logs", data.get("logs", []).duplicate())
-	_restore_hotspots(game, data.get("hotspots", {}))
-	var allies_data: Dictionary = data.get("allies", {})
-	game.set("allies", allies_data.duplicate())
-	return true
+	if not FileAccess.file_exists(slot_path(slot)):
+		return false
+	var f := FileAccess.open(slot_path(slot), FileAccess.READ)
+	if f == null:
+		return false
+	var txt := f.get_as_text()
+	f.close()
+	return txt.strip_edges() != ""
 
-static func _restore_hotspots(game: Node, hotspot_data: Dictionary) -> void:
-	var hotspots: Dictionary = game.get("hotspots", {})
-	for key in hotspot_data.keys():
-		if not hotspots.has(key):
-			continue
-		var saved: Dictionary = hotspot_data[key]
-		var current: Dictionary = hotspots[key]
-		current["value"] = saved.get("value", current.get("value", 100.0))
-		current["pressure"] = saved.get("pressure", current.get("pressure", 0.0))
-		current["active"] = saved.get("active", current.get("active", false))
-		current["assault"] = saved.get("assault", current.get("assault", false))
-		current["warning"] = saved.get("warning", current.get("warning", false))
-		current["braced"] = saved.get("braced", current.get("braced", false))
-		current["temp_seal"] = saved.get("temp_seal", current.get("temp_seal", 0.0))
-		current["breach_timer"] = saved.get("breach_timer", current.get("breach_timer", -1.0))
-		hotspots[key] = current
-	game.set("hotspots", hotspots)
+
+static func _ensure_save_dir() -> void:
+	if not DirAccess.dir_exists_absolute(SAVE_DIR):
+		var d := DirAccess.open(SAVE_DIR)
+		if d == null:
+			d = DirAccess.open("user://")
+		if d != null:
+			d.make_dir_recursive("saves")

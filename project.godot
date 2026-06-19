@@ -10,9 +10,15 @@ config_version=5
 
 [application]
 
-config/name="最后电台 Demo"
+config/name="Last Radio v2"
+config/description="Last Radio: Old Stadium Watch — a 10-night resource-and-positioning defense game set in an abandoned stadium on the edge of a dead city."
 run/main_scene="res://scenes/NightShiftGame.tscn"
 config/features=PackedStringArray("4.6")
+
+[autoload]
+
+_mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
+Steamworks="*res://scripts/Steamworks.gd"
 
 [display]
 
@@ -20,6 +26,16 @@ window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+application/config/icon="res://icon.png"
+application/boot_splash/use_filter=false
+application/boot_splash/image="res://default_splash.png"
+application/boot_splash/fullsize=false
+application/boot_splash/use_colors=false
+application/boot_splash/bg_color=Color(0.07, 0.08, 0.12, 1)
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg")
 
 [rendering]
 

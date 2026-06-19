@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "comment": "Channel definitions used by the radio contact mini-game. Each night picks one as the target channel; the player must tune to it before the contact timer fills.",
+  "channels": [
+    {
+      "id": "victor",
+      "label": "Victor",
+      "voice": "victor_default",
+      "color": "#FFD27F",
+      "desc": "Victor 的频道，语气平稳，会报坐标。",
+      "wrong_signal": "static_brief",
+      "exposure_on_wrong": 0.0
+    },
+    {
+      "id": "elias",
+      "label": "Elias",
+      "voice": "elias_default",
+      "color": "#9CD9FF",
+      "desc": "Elias 的频道，气息短促，靠近新天线时会清晰。",
+      "wrong_signal": "static_brief",
+      "exposure_on_wrong": 0.0
+    },
+    {
+      "id": "static",
+      "label": "干扰",
+      "voice": "static_loop",
+      "color": "#C97C7C",
+      "desc": "只有噪声。即使拨到这一格也算接听错误（暴露度 +0.5）。",
+      "wrong_signal": "static_brief",
+      "exposure_on_wrong": 0.5
+    }
+  ]
+}

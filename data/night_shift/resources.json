@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "resources": [
+    {
+      "id": "planks",
+      "name": "木板",
+      "name_en": "Planks",
+      "kind": "stock",
+      "initial": 4,
+      "min": 0,
+      "max": 8,
+      "description": "用于夜晚应急封堵，也用于白天加固门窗。",
+      "description_en": "Used for emergency night repairs and daytime fortification."
+    },
+    {
+      "id": "parts",
+      "name": "零件",
+      "name_en": "Parts",
+      "kind": "stock",
+      "initial": 4,
+      "min": 0,
+      "max": 8,
+      "description": "用于修理发电机、天线、电台和结构加固。",
+      "description_en": "Used to fix generator, antenna, radio, and structural upgrades."
+    },
+    {
+      "id": "battery",
+      "name": "电池",
+      "name_en": "Battery",
+      "kind": "stock",
+      "initial": 2,
+      "min": 0,
+      "max": 6,
+      "description": "用于维持电力、广播和部分低光照方案。",
+      "description_en": "Used to maintain power, broadcasts, and low-light setups."
+    },
+    {
+      "id": "medicine",
+      "name": "药品",
+      "name_en": "Medicine",
+      "kind": "stock",
+      "initial": 2,
+      "min": 0,
+      "max": 6,
+      "description": "用于医务角、搜救伤员和稳定避难者。",
+      "description_en": "Used for the medbay, rescue operations, and morale."
+    },
+    {
+      "id": "exposure",
+      "name": "暴露度",
+      "name_en": "Exposure",
+      "kind": "pressure",
+      "initial": 0,
+      "min": 0,
+      "max": 10,
+      "description": "广播、灯光、搜救和人口增长会提高暴露度；暴露度越高，夜晚越容易被追踪。",
+      "description_en": "Higher exposure means easier to track at night."
+    },
+    {
+      "id": "trust",
+      "name": "信任",
+      "name_en": "Trust",
+      "kind": "morale",
+      "initial": 3,
+      "min": 0,
+      "max": 10,
+      "description": "避难者对值班台和同伴的信任。影响恐慌、冲突和部分白天选择。",
+      "description_en": "Refugee trust in the watch post and allies."
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+script load OK
+scene load OK

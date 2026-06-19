@@ -1,6 +1,6 @@
-[gd_scene load_steps=2 format=3 uid="uid://last_radio_night_shift_game"]
+[gd_scene load_steps=2 format=3 uid="uid://bnightradioscene01"]
 
-[ext_resource type="Script" path="res://scripts/NightShiftGame.gd" id="1_night_shift"]
+[ext_resource type="Script" path="res://scripts/NightShiftGame.gd" id="1_main"]
 
 [node name="NightShiftGame" type="Node2D"]
-script = ExtResource("1_night_shift")
+script = ExtResource("1_main")

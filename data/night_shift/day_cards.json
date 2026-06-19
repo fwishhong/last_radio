@@ -1,0 +1,698 @@
+{
+  "version": 1,
+  "cards": [
+    {
+      "id": "start",
+      "type": "setup",
+      "name": "开始守夜",
+      "body": "不做额外准备，直接进入今晚。",
+      "cost": {},
+      "gain": {},
+      "effects": [],
+      "tags": [
+        "tutorial"
+      ],
+      "name_en": "Begin Watch",
+      "body_en": "No extra preparation. Go straight into the night."
+    },
+    {
+      "id": "door_reinforce",
+      "type": "fortify",
+      "name": "加固正门",
+      "body": "正门更耐撞，破防前多撑一会儿。",
+      "cost": {
+        "planks": 1
+      },
+      "gain": {},
+      "effects": [
+        {
+          "id": "barrier_pressure",
+          "target": "front_door",
+          "multiplier": 0.72
+        },
+        {
+          "id": "barrier_cap",
+          "target": "front_door",
+          "bonus": 10
+        }
+      ],
+      "tags": [
+        "door",
+        "front_door"
+      ],
+      "name_en": "Reinforce Front Door",
+      "body_en": "Front door holds longer before breaking."
+    },
+    {
+      "id": "window_brace",
+      "type": "fortify",
+      "name": "补窗板",
+      "body": "左右窗更结实，Nora 修窗更快。",
+      "cost": {
+        "planks": 1
+      },
+      "gain": {},
+      "effects": [
+        {
+          "id": "barrier_pressure",
+          "target": "windows",
+          "multiplier": 0.78
+        },
+        {
+          "id": "nora_work_rate",
+          "bonus": 4
+        }
+      ],
+      "tags": [
+        "window",
+        "nora"
+      ],
+      "name_en": "Brace Windows",
+      "body_en": "Left and right windows get sturdier. Nora repairs them faster."
+    },
+    {
+      "id": "battery_buffer",
+      "type": "fortify",
+      "name": "接备用电瓶",
+      "body": "发电机更不容易掉到底并断电。",
+      "cost": {
+        "battery": 1
+      },
+      "gain": {},
+      "effects": [
+        {
+          "id": "generator_drain",
+          "multiplier": 0.62
+        }
+      ],
+      "tags": [
+        "generator",
+        "power"
+      ],
+      "name_en": "Backup Battery",
+      "body_en": "Generator is less likely to fully drain and lose power."
+    },
+    {
+      "id": "generator_tune",
+      "type": "fortify",
+      "name": "检修发电机",
+      "body": "发电机掉电更慢，停电后更容易拉回。",
+      "cost": {
+        "parts": 1
+      },
+      "gain": {},
+      "effects": [
+        {
+          "id": "generator_drain",
+          "multiplier": 0.78
+        },
+        {
+          "id": "repair_rate",
+          "target": "generator",
+          "bonus": 6
+        }
+      ],
+      "tags": [
+        "generator",
+        "power"
+      ],
+      "name_en": "Service Generator",
+      "body_en": "Generator drains slower. Easier to recover from a blackout."
+    },
+    {
+      "id": "radio_booster",
+      "type": "fortify",
+      "name": "架高天线",
+      "body": "电台呼叫持续更久，也更容易接通。",
+      "cost": {
+        "parts": 1
+      },
+      "gain": {},
+      "effects": [
+        {
+          "id": "radio_contact_goal",
+          "value": 2
+        }
+      ],
+      "tags": [
+        "radio",
+        "antenna"
+      ],
+      "name_en": "Raise the Antenna",
+      "body_en": "Radio calls last longer and connect more easily."
+    },
+    {
+      "id": "workbench",
+      "type": "fortify",
+      "name": "整理工具台",
+      "body": "值班员修理和操作速度小幅提高。",
+      "cost": {
+        "parts": 1
+      },
+      "gain": {},
+      "effects": [
+        {
+          "id": "repair_rate",
+          "target": "all",
+          "bonus": 5
+        }
+      ],
+      "tags": [
+        "player",
+        "repair"
+      ],
+      "name_en": "Tidy Workbench",
+      "body_en": "Slight boost to repair and operation speed."
+    },
+    {
+      "id": "antenna_anchor",
+      "type": "fortify",
+      "name": "固定天线",
+      "body": "天线掉线更慢，呼叫更不容易丢。",
+      "cost": {
+        "parts": 1
+      },
+      "gain": {},
+      "effects": [
+        {
+          "id": "support_pressure",
+          "target": "antenna",
+          "multiplier": 0.68
+        },
+        {
+          "id": "support_cap",
+          "target": "antenna",
+          "bonus": 12
+        }
+      ],
+      "tags": [
+        "antenna",
+        "radio"
+      ],
+      "name_en": "Anchor Antenna",
+      "body_en": "Antenna drops less. Calls are harder to lose."
+    },
+    {
+      "id": "storage",
+      "type": "fortify",
+      "name": "整理储物间",
+      "body": "多找出一批木板，应急封堵更久。",
+      "cost": {},
+      "gain": {
+        "planks": 1
+      },
+      "effects": [
+        {
+          "id": "plank_seal_time",
+          "bonus": 4
+        },
+        {
+          "id": "plank_cooldown",
+          "bonus": -5
+        }
+      ],
+      "tags": [
+        "storage",
+        "planks"
+      ],
+      "name_en": "Organize Storage",
+      "body_en": "Find extra planks. Emergency repairs last longer."
+    },
+    {
+      "id": "medbay",
+      "type": "fortify",
+      "name": "设医务角",
+      "body": "消耗药品，换来避难者信任和同伴稳定。",
+      "cost": {
+        "medicine": 1
+      },
+      "gain": {
+        "trust": 1
+      },
+      "effects": [
+        {
+          "id": "helper_work_rate",
+          "bonus": 2
+        }
+      ],
+      "tags": [
+        "medbay",
+        "trust"
+      ],
+      "name_en": "Set up Medbay",
+      "body_en": "Spend medicine. Refugee trust and ally stability."
+    },
+    {
+      "id": "rescue_bleachers",
+      "type": "rescue",
+      "name": "搜救看台",
+      "body": "救回躲在看台的人，但会消耗药品并提高暴露。",
+      "cost": {
+        "medicine": 1
+      },
+      "gain": {
+        "trust": 2,
+        "exposure": 1
+      },
+      "effects": [
+        {
+          "id": "night_pressure_tag",
+          "tag": "noise"
+        }
+      ],
+      "tags": [
+        "rescue",
+        "trust",
+        "noise"
+      ],
+      "name_en": "Rescue Bleachers",
+      "body_en": "Save people hiding in the bleachers. Uses medicine and raises exposure."
+    },
+    {
+      "id": "storage_sweep",
+      "type": "scavenge",
+      "name": "搜器材柜",
+      "body": "获得木板和零件，但 Nora 夜里会更疲惫。",
+      "cost": {},
+      "gain": {
+        "planks": 2,
+        "parts": 1
+      },
+      "effects": [
+        {
+          "id": "npc_fatigue",
+          "target": "nora",
+          "value": 1
+        }
+      ],
+      "tags": [
+        "scavenge",
+        "storage",
+        "nora"
+      ],
+      "name_en": "Scavenge Equipment",
+      "body_en": "Gain planks and parts. Nora tires more easily tonight."
+    },
+    {
+      "id": "open_route",
+      "type": "broadcast",
+      "name": "公开路线",
+      "body": "广播坐标以换取回应，但暴露度上升。",
+      "cost": {
+        "battery": 1
+      },
+      "gain": {
+        "trust": 1,
+        "exposure": 2
+      },
+      "effects": [
+        {
+          "id": "radio_response",
+          "value": 1
+        }
+      ],
+      "tags": [
+        "broadcast",
+        "exposure",
+        "victor"
+      ],
+      "name_en": "Publish Route",
+      "body_en": "Broadcast the coordinates for response, but exposure rises."
+    },
+    {
+      "id": "keep_silent",
+      "type": "broadcast",
+      "name": "保持沉默",
+      "body": "降低暴露度，但可能错过外部回应。",
+      "cost": {},
+      "gain": {
+        "exposure": -1
+      },
+      "effects": [
+        {
+          "id": "radio_response",
+          "value": -1
+        }
+      ],
+      "tags": [
+        "broadcast",
+        "quiet"
+      ],
+      "name_en": "Stay Silent",
+      "body_en": "Lower exposure, but might miss outside responses."
+    },
+    {
+      "id": "back_door_bar",
+      "type": "fortify",
+      "name": "横闩后门",
+      "body": "后门更耐撞。",
+      "cost": {
+        "planks": 1,
+        "parts": 1
+      },
+      "gain": {},
+      "effects": [
+        {
+          "id": "barrier_pressure",
+          "target": "back_door",
+          "multiplier": 0.72
+        }
+      ],
+      "tags": [
+        "back_door",
+        "door"
+      ],
+      "name_en": "Bar Back Door",
+      "body_en": "Back door holds longer."
+    },
+    {
+      "id": "generator_cage",
+      "type": "fortify",
+      "name": "围住发电机",
+      "body": "后门告急时，发电机掉压少一点。",
+      "cost": {
+        "parts": 1
+      },
+      "gain": {},
+      "effects": [
+        {
+          "id": "generator_drain",
+          "multiplier": 0.82
+        }
+      ],
+      "tags": [
+        "generator",
+        "back_door"
+      ],
+      "name_en": "Cage Generator",
+      "body_en": "When the back door is in trouble, generator loses less."
+    },
+    {
+      "id": "runner_path",
+      "type": "fortify",
+      "name": "清出通道",
+      "body": "主角移动速度提高。",
+      "cost": {},
+      "gain": {},
+      "effects": [
+        {
+          "id": "player_speed",
+          "bonus": 34
+        }
+      ],
+      "tags": [
+        "player",
+        "movement"
+      ],
+      "name_en": "Clear Path",
+      "body_en": "Player movement speed increases."
+    },
+    {
+      "id": "medbay_lamp",
+      "type": "fortify",
+      "name": "接医务灯",
+      "body": "医务角告急更少，信任小幅提高。",
+      "cost": {
+        "battery": 1
+      },
+      "gain": {
+        "trust": 1
+      },
+      "effects": [
+        {
+          "id": "support_pressure",
+          "target": "medbay",
+          "multiplier": 0.72
+        }
+      ],
+      "tags": [
+        "medbay",
+        "medicine"
+      ],
+      "name_en": "Medbay Lamp",
+      "body_en": "Fewer medbay alerts. Slight trust gain."
+    },
+    {
+      "id": "nora_kit",
+      "type": "fortify",
+      "name": "整理药箱",
+      "body": "Nora 处理医务和窗户更快。",
+      "cost": {
+        "medicine": 1
+      },
+      "gain": {},
+      "effects": [
+        {
+          "id": "nora_work_rate",
+          "bonus": 2
+        }
+      ],
+      "tags": [
+        "nora",
+        "medbay"
+      ],
+      "name_en": "Organize Medkit",
+      "body_en": "Nora handles medbay and windows faster."
+    },
+    {
+      "id": "quiet_hours",
+      "type": "setup",
+      "name": "安排静默",
+      "body": "前半夜随机噪声减少，暴露度下降。",
+      "cost": {},
+      "gain": {
+        "exposure": -1
+      },
+      "effects": [
+        {
+          "id": "random_noise",
+          "multiplier": 0.7
+        }
+      ],
+      "tags": [
+        "quiet",
+        "exposure"
+      ],
+      "name_en": "Quiet Hours",
+      "body_en": "First half of the night: less random noise, lower exposure."
+    },
+    {
+      "id": "salvage_planks",
+      "type": "scavenge",
+      "name": "拆看台木板",
+      "body": "获得大量木板，但消耗信任并提高暴露。",
+      "cost": {
+        "trust": 1
+      },
+      "gain": {
+        "planks": 3,
+        "exposure": 1
+      },
+      "effects": [
+        {
+          "id": "plank_cooldown",
+          "bonus": -4
+        }
+      ],
+      "tags": [
+        "planks",
+        "scavenge",
+        "exposure"
+      ],
+      "name_en": "Salvage Bleacher Planks",
+      "body_en": "Lots of planks, but spend trust and raise exposure."
+    },
+    {
+      "id": "double_brace",
+      "type": "fortify",
+      "name": "双层窗撑",
+      "body": "窗口的临时封堵更久。",
+      "cost": {
+        "planks": 1
+      },
+      "gain": {},
+      "effects": [
+        {
+          "id": "plank_seal_time",
+          "target": "windows",
+          "bonus": 4
+        }
+      ],
+      "tags": [
+        "window",
+        "planks"
+      ],
+      "name_en": "Double Window Brace",
+      "body_en": "Window emergency seals last longer."
+    },
+    {
+      "id": "victor_cache",
+      "type": "scavenge",
+      "name": "标记物资箱",
+      "body": "按 Victor 的坐标找到零件，仓库压力降低。",
+      "cost": {
+        "battery": 1
+      },
+      "gain": {
+        "parts": 1
+      },
+      "effects": [
+        {
+          "id": "support_pressure",
+          "target": "storage",
+          "multiplier": 0.72
+        }
+      ],
+      "tags": [
+        "victor",
+        "storage"
+      ],
+      "name_en": "Mark Supply Crate",
+      "body_en": "Find parts at Victor's coordinates. Storage pressure lowers."
+    },
+    {
+      "id": "signal_battery",
+      "type": "fortify",
+      "name": "信号电瓶",
+      "body": "停电时天线掉线速度降低。",
+      "cost": {
+        "battery": 1,
+        "parts": 1
+      },
+      "gain": {},
+      "effects": [
+        {
+          "id": "support_pressure",
+          "target": "antenna_blackout",
+          "multiplier": 0.55
+        }
+      ],
+      "tags": [
+        "antenna",
+        "battery"
+      ],
+      "name_en": "Signal Battery",
+      "body_en": "During blackout, antenna drops slower."
+    },
+    {
+      "id": "cable_route",
+      "type": "fortify",
+      "name": "重走线缆",
+      "body": "天线和电台修复更快。",
+      "cost": {
+        "parts": 2
+      },
+      "gain": {},
+      "effects": [
+        {
+          "id": "repair_rate",
+          "target": "radio_antenna",
+          "bonus": 6
+        }
+      ],
+      "tags": [
+        "radio",
+        "antenna"
+      ],
+      "name_en": "Re-route Cables",
+      "body_en": "Antenna and radio repair faster."
+    },
+    {
+      "id": "elias_tools",
+      "type": "fortify",
+      "name": "给 Elias 工具",
+      "body": "Elias 自动处理电台和天线更快。",
+      "cost": {
+        "parts": 1
+      },
+      "gain": {},
+      "effects": [
+        {
+          "id": "elias_work_rate",
+          "bonus": 3
+        }
+      ],
+      "tags": [
+        "elias",
+        "radio",
+        "antenna"
+      ],
+      "name_en": "Tools for Elias",
+      "body_en": "Elias auto-handles radio and antenna faster."
+    },
+    {
+      "id": "final_barricade",
+      "type": "fortify",
+      "name": "最后路障",
+      "body": "所有门窗初始更稳。",
+      "cost": {
+        "planks": 2,
+        "parts": 1
+      },
+      "gain": {},
+      "effects": [
+        {
+          "id": "barrier_cap",
+          "target": "all_barriers",
+          "bonus": 8
+        }
+      ],
+      "tags": [
+        "final",
+        "barrier"
+      ],
+      "name_en": "Final Barricade",
+      "body_en": "All doors and windows start sturdier."
+    },
+    {
+      "id": "all_hands",
+      "type": "setup",
+      "name": "全员分工",
+      "body": "Nora 和 Elias 自动处理速度提高。",
+      "cost": {},
+      "gain": {},
+      "effects": [
+        {
+          "id": "nora_work_rate",
+          "bonus": 2
+        },
+        {
+          "id": "elias_work_rate",
+          "bonus": 3
+        }
+      ],
+      "tags": [
+        "final",
+        "nora",
+        "elias"
+      ],
+      "name_en": "All Hands",
+      "body_en": "Nora and Elias auto-handle things faster."
+    },
+    {
+      "id": "radio_beacon",
+      "type": "broadcast",
+      "name": "开信标",
+      "body": "最终夜电台呼叫窗口更长，但暴露度大幅上升。",
+      "cost": {
+        "battery": 1
+      },
+      "gain": {
+        "exposure": 3
+      },
+      "effects": [
+        {
+          "id": "radio_window",
+          "bonus": 8
+        }
+      ],
+      "tags": [
+        "final",
+        "radio",
+        "exposure"
+      ],
+      "name_en": "Open Beacon",
+      "body_en": "Final night radio window is longer, but exposure spikes."
+    }
+  ]
+}

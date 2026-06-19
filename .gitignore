@@ -1,10 +1,7 @@
 ﻿# Godot specific
 .godot/
-*.import
 *.translation
 import/
-# Large assets (use Git LFS)
-assets/
 # IDE
 .vscode/
 .idea/
@@ -18,3 +15,8 @@ __pycache__/
 *.log
 *.autosave
 *.tmp
+# Dev screenshots (capture tool output)
+screenshots/*.png
+# Godot import metadata is generated alongside assets and must be tracked
+# so editor opens work without a re-import pass.
+!*.import

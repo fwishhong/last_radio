@@ -1,6 +1,10 @@
 # NightShiftGame v0.5 Status
 
-Date: 2026-06-07
+Date: 2026-06-07 (last meaningful content)
+Last reviewed: 2026-06-18 — see "Current validation" at the bottom; the rest
+of this document is preserved as a snapshot of the v0.5 era. The current
+gameplay loop, save format, audio system, and visual capture pipeline
+have all moved on since then.
 
 ## Direction
 
@@ -98,21 +102,51 @@ No current `NightShiftLevels.gd` upgrade choice is missing formal event art.
 
 `tools/process_download_night_shift_missing_events.py` is now guarded against accidental overwrite. It requires either five explicit `--source` paths or `--latest-five`, and it only writes files when `--apply` is passed.
 
-## Validation
+## Validation (snapshot from 2026-06-07 — superseded, see below)
 
-Current passing checks:
+The validation block above references tools that have since been archived
+because they called helpers (`_debug_set_seed`, `_debug_choose_day`,
+`_debug_get_audio_state`, `_debug_step`, etc.) that were removed when the
+game was rewritten as a single-script state machine.
+
+Archived tools (each has a SKIP banner + pointer to its replacement):
+
+| Archived | Replacement |
+|---|---|
+| `tools/night_shift_smoke_test.gd` | `tools/night_shift_full_flow_test.gd` |
+| `tools/night_shift_campaign_flow_check.gd` | `tools/night_shift_full_flow_test.gd` |
+| `tools/night_shift_audio_probe.gd` | `tools/sfx_test.gd` |
+| `tools/night_shift_first_four_playtest.gd` | `tools/night_shift_full_flow_test.gd` |
+| `tools/save_load_smoke_test.gd` | `tools/save_test.gd` |
+| `tools/test_simple_await.gd` | (scratch; deleted-equivalent) |
+| `tools/capture_night_shift_gui.gd` | `tools/capture_night_shift_screens.gd` |
+| `tools/capture_defense_gui.gd` | (DefenseGame is legacy; no replacement) |
+
+## Current validation (2026-06-18)
+
+The full current test suite (12 scripts, ~340 individual assertions, all PASS):
 
 ```powershell
-& ..\Godot_v4.6.3-stable_win64_console.exe --headless --path . --script res://tools/night_shift_smoke_test.gd
-& ..\Godot_v4.6.3-stable_win64_console.exe --headless --path . --script res://tools/night_shift_campaign_flow_check.gd
-& ..\Godot_v4.6.3-stable_win64_console.exe --path . --script res://tools/night_shift_audio_probe.gd
-& ..\Godot_v4.6.3-stable_win64_console.exe --headless --path . --script res://tools/defense_smoke_test.gd
-& ..\Godot_v4.6.3-stable_win64_console.exe --headless --path . --script res://tools/v2_smoke_test.gd --verbose
-& ..\Godot_v4.6.3-stable_win64_console.exe --headless --path . --script res://tools/audit_night_shift_assets.gd
-& ..\Godot_v4.6.3-stable_win64_console.exe --headless --path . --quit
-& ..\Godot_v4.6.3-stable_win64_console.exe --path . --script res://tools/capture_night_shift_gui.gd
+& "C:\Users\Administrator\godot_console.exe" --headless --path . --script res://tools/save_test.gd
+& "C:\Users\Administrator\godot_console.exe" --headless --path . --script res://tools/sfx_test.gd
+& "C:\Users\Administrator\godot_console.exe" --headless --path . --script res://tools/flow_integration_test.gd
+& "C:\Users\Administrator\godot_console.exe" --headless --path . --script res://tools/night_shift_basic_test.gd
+& "C:\Users\Administrator\godot_console.exe" --headless --path . --script res://tools/night_shift_data_validate.gd
+& "C:\Users\Administrator\godot_console.exe" --headless --path . --script res://tools/hotspot_dot_test.gd
+& "C:\Users\Administrator\godot_console.exe" --headless --path . --script res://tools/day_effects_test.gd
+& "C:\Users\Administrator\godot_console.exe" --headless --path . --script res://tools/late_hotspot_enemy_test.gd
+& "C:\Users\Administrator\godot_console.exe" --headless --path . --script res://tools/night_report_stats_test.gd
+& "C:\Users\Administrator\godot_console.exe" --headless --path . --script res://tools/radio_contact_test.gd
+& "C:\Users\Administrator\godot_console.exe" --headless --path . --script res://tools/night_shift_full_flow_test.gd
+& "C:\Users\Administrator\godot_console.exe" --headless --path . --script res://tools/signal_catalog_test.gd
 ```
 
-The v2 verbose run may print Godot controller mapping warnings; those warnings did not fail the test.
+Visual capture (no `--headless` — needs the rendering backend):
 
-`tools/night_shift_campaign_flow_check.gd` walks a deterministic ten-night campaign path and verifies that every night can reach a success report and the final campaign success state.
+```powershell
+& "C:\Users\Administrator\godot_console.exe" --path . --script res://tools/capture_night_shift_screens.gd
+& "C:\Users\Administrator\godot_console.exe" --path . --script res://tools/capture_smoke_test.gd
+```
+
+The v2 verbose run may print Godot controller mapping warnings; those
+warnings did not fail the test.
