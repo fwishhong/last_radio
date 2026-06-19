@@ -1,0 +1,12 @@
+Godot Engine v4.3.stable.official.77dcf97d8 - https://godotengine.org
+OpenGL API 3.3.0 NVIDIA 596.49 - Compatibility - Using Device: NVIDIA - NVIDIA GeForce RTX 5060 Ti
+
+[godot_ai game_helper] registered mcp capture (debugger active=false, logger=false)
+Steamworks: GodotSteam not found, using stub backend (achievements won't unlock on Steam)
+  01_clean: C:/Users/Administrator/AppData/Roaming/Godot/app_userdata/Last Radio v2/last_radio_v2_fx_shots/01_clean.png
+  02_telegraph: C:/Users/Administrator/AppData/Roaming/Godot/app_userdata/Last Radio v2/last_radio_v2_fx_shots/02_telegraph.png
+  03_breach: C:/Users/Administrator/AppData/Roaming/Godot/app_userdata/Last Radio v2/last_radio_v2_fx_shots/03_breach.png
+  04_critical_threat: C:/Users/Administrator/AppData/Roaming/Godot/app_userdata/Last Radio v2/last_radio_v2_fx_shots/04_critical_threat.png
+  05_radio_static: C:/Users/Administrator/AppData/Roaming/Godot/app_userdata/Last Radio v2/last_radio_v2_fx_shots/05_radio_static.png
+FX capture complete: C:/Users/Administrator/AppData/Roaming/Godot/app_userdata/Last Radio v2/last_radio_v2_fx_shots
+  06_dawn_fade: C:/Users/Administrator/AppData/Roaming/Godot/app_userdata/Last Radio v2/last_radio_v2_fx_shots/06_dawn_fade.png
