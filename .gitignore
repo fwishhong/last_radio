@@ -20,3 +20,9 @@ screenshots/*.png
 # Godot import metadata is generated alongside assets and must be tracked
 # so editor opens work without a re-import pass.
 !*.import
+# Build outputs (rebuilt by tools/build_release.ps1, build_capsules.ps1, etc.)
+build/
+# Local scratchpad / notes
+0
+*.remap
+
