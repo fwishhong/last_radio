@@ -9,6 +9,14 @@ extends Node2D
 
 const I18n := preload("res://scripts/I18n.gd")
 const Settings := preload("res://scripts/Settings.gd")
+const Fx := preload("res://scripts/NightShiftFx.gd")
+const FxLayer := preload("res://scripts/FxLayerNode.gd")
+
+# Effect tuning knobs. Lead time is how many seconds before an assault
+# actually hits the hotspot that the warning telegraph appears. Particles
+# per impulse control how dense the bursts look at default intensity.
+const FX_TELEGRAPH_LEAD_TIME := 2.0
+const FX_PARTICLE_LIMIT := 400  # hard cap so an assault storm can't tank FPS
 
 # ============================================================================
 # CONSTANTS
@@ -173,6 +181,36 @@ var art: Dictionary = {}
 var audio_streams: Dictionary = {}
 var sfx_streams: Dictionary = {}
 var walk_frames: Dictionary = {}  # {direction: [Texture2D]}
+
+# Procedural FX state. fx_particles and fx_telegraphs are tick()'d every frame
+# in _update_night; fx_layer is the Node2D that actually draws the particles
+# (so _draw doesn't have to fight with the rest of the scene tree).
+var fx_particles: Array = []
+var fx_telegraphs: Array = []
+var fx_shake: Dictionary = {"amount": 0.0, "decay": 6.0, "freq": 28.0, "phase": 0.0}
+var fx_layer: Node2D
+# Track each hotspot's previous damage tier so we only spawn a crack/splinter
+# burst when it crosses a threshold (not every frame it drops).
+var fx_last_damage_tier: Dictionary = {}  # id -> int (0..3)
+
+# Critical-tier screen border: a thin pulsing ColorRect that appears when any
+# hotspot drops below 25% integrity. Pulses faster as more hotspots enter
+# the critical tier.
+var fx_critical_overlay: ColorRect
+var fx_critical_alpha: float = 0.0
+# Repair combo: chains of consecutive repairs within COMBO_WINDOW seconds
+# grant a +1 trust bonus per chain step. The combo resets if the player
+# spends more than COMBO_WINDOW seconds away from any hotspot.
+var fx_combo_count: int = 0
+var fx_combo_time_left: float = 0.0
+const COMBO_WINDOW := 3.5  # seconds between chained repairs to keep the streak
+const COMBO_TRUST_BONUS := 1  # trust awarded per chain step
+# Off-screen threat arrows: when an assault is happening and the player is
+# far enough that the hotspot isn't visible (or barely visible), draw a
+# directional arrow at the screen edge pointing at it. Drawn by fx_layer.
+var fx_threat_arrows: Array = []  # [{pos, strength, color}, ...] — owned by fx_tick
+# Threat arrow pulse phase, advanced each frame.
+var fx_threat_phase: float = 0.0
 
 # ============================================================================
 # LIFECYCLE
@@ -381,6 +419,22 @@ func _build_ui() -> void:
 
 	enemy_layer = Node2D.new()
 	canvas.add_child(enemy_layer)
+
+	# Procedural FX layer — particles + telegraph rings. Sits above the
+	# enemy layer so breaches and sparks read on top of the enemy tokens.
+	fx_layer = FxLayer.new()
+	fx_layer.z_index = 5
+	canvas.add_child(fx_layer)
+
+	# Critical-tier screen border overlay. Invisible by default; animated
+	# up/down in _fx_tick based on whether any hotspot is in tier 3.
+	fx_critical_overlay = ColorRect.new()
+	fx_critical_overlay.position = Vector2.ZERO
+	fx_critical_overlay.size = SCREEN_SIZE
+	fx_critical_overlay.color = Color(0.7, 0.15, 0.1, 0.0)
+	fx_critical_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fx_critical_overlay.z_index = 4
+	canvas.add_child(fx_critical_overlay)
 
 	card_layer = Control.new()
 	card_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1388,6 +1442,25 @@ func _show_night() -> void:
 	_update_status_label()
 	_update_visual_feedback()
 
+	# Wire FX layer to current hotspot positions (re-read every night since
+	# unlocked_hotspots changes the set) and reset transient FX state.
+	if fx_layer:
+		var positions: Dictionary = {}
+		for id in hotspots:
+			positions[id] = hotspots[id]["pos"]
+		fx_layer._fx_set_refs(fx_particles, fx_telegraphs, fx_shake, positions)
+		fx_layer._fx_mark_dirty()
+	fx_combo_count = 0
+	fx_combo_time_left = 0.0
+	_fx_combo_accum = 0.0
+	fx_threat_arrows.clear()
+	fx_threat_phase = 0.0
+	fx_critical_alpha = 0.0
+	fx_particles.clear()
+	fx_telegraphs.clear()
+	fx_shake = {"amount": 0.0, "decay": 6.0, "freq": 28.0, "phase": 0.0}
+	fx_last_damage_tier.clear()
+
 	# Tutorial overlay: only on Night 0, only if the save hasn't completed
 	# the tutorial. If there's no save, this is the very first run — show it.
 	_maybe_start_tutorial()
@@ -1514,10 +1587,199 @@ func _update_night(delta: float) -> void:
 	_update_visual_feedback()
 	_update_status_label()
 	_update_radio_panel()
+	_fx_tick(delta)
 
 	night_elapsed += delta
 	if night_elapsed >= night_duration:
 		_end_night(true)
+
+
+# ----------------------------------------------------------------------------
+# Procedural FX (particles, screen shake, telegraphs)
+# ----------------------------------------------------------------------------
+
+func _fx_tick(delta: float) -> void:
+	# Particles advance; if we hit the cap, drop the oldest first so a long
+	# battle doesn't slowly push newer ones out of frame.
+	while fx_particles.size() > FX_PARTICLE_LIMIT:
+		fx_particles.pop_front()
+	Fx.tick_particles(fx_particles, delta)
+	# Telegraphs pulse and (when their timer expires) return a fired-list for
+	# the game to translate into actual assault events.
+	Fx.telegraph_phase_tick(fx_telegraphs, delta)
+	var fired: Array = Fx.telegraph_tick(fx_telegraphs, delta)
+	for t in fired:
+		# Replay the trigger event the telegraph was warning about. By the
+		# time the warning timer hits zero, the player has had FX_TELEGRAPH_LEAD_TIME
+		# seconds to react (move closer, brace, etc).
+		_fx_fire_telegraph(t)
+	# Shake decay.
+	Fx.shake_tick(fx_shake, delta)
+	# Apply shake offset to the world-position layers (player + enemies +
+	# hotspots) so an impact feels like the room flinching. HUD labels are
+	# exempt so the timer / status don't dance around.
+	if fx_shake.get("amount", 0.0) > 0.0:
+		var off: Vector2 = Fx.shake_offset(fx_shake)
+		hotspot_layer.position = off
+		enemy_layer.position = off
+		player_token.position = player_pos + off
+		fx_layer._fx_mark_dirty()
+	else:
+		if hotspot_layer.position != Vector2.ZERO:
+			hotspot_layer.position = Vector2.ZERO
+			enemy_layer.position = Vector2.ZERO
+			player_token.position = player_pos
+			fx_layer._fx_mark_dirty()
+	# No shake but content is on screen — still need to redraw so the
+	# particles advance. queue_redraw() is cheap when the canvas is small.
+	if fx_particles.size() > 0 or fx_telegraphs.size() > 0 or fx_threat_arrows.size() > 0:
+		fx_layer._fx_mark_dirty()
+
+	# Repair-combo timer. _fx_on_repair_hit() extends the timer; if it
+	# expires without another repair, the combo resets.
+	if fx_combo_time_left > 0.0:
+		fx_combo_time_left -= delta
+		if fx_combo_time_left <= 0.0:
+			fx_combo_time_left = 0.0
+			if fx_combo_count >= 2:
+				# Show the combo result on the log so the player notices.
+				_log("维修连击结束：x%d（信任+%d）" % [fx_combo_count, fx_combo_count * COMBO_TRUST_BONUS])
+			fx_combo_count = 0
+
+	# Critical-tier overlay: alpha tracks the count of tier-3 hotspots,
+	# pulsing at a steady rate so it feels alive but not seizure-y.
+	var crit_count: int = 0
+	for id in hotspots:
+		var h: Dictionary = hotspots[id]
+		if h["breach_timer"] >= 0.0:
+			continue
+		if float(h["value"]) / max(1.0, float(h["max_value"])) <= 0.25:
+			crit_count += 1
+	var target_alpha: float = 0.0
+	if crit_count > 0:
+		# Pulse 0.18..0.42 alpha at ~2Hz, scaled by crit_count (1..4).
+		var pulse: float = 0.5 + 0.5 * sin(fx_threat_phase * 4.0)
+		target_alpha = (0.18 + 0.08 * float(min(crit_count, 4))) * pulse
+	# Smooth toward target so alpha doesn't snap on/off.
+	fx_critical_alpha = lerp(fx_critical_alpha, target_alpha, min(1.0, delta * 6.0))
+	if fx_critical_overlay:
+		fx_critical_overlay.color.a = fx_critical_alpha
+
+	# Threat arrows: build the arrow list fresh each frame. An arrow appears
+	# for each assaulting hotspot that's either off-screen or beyond an
+	# arrow-distance threshold from the player. Strength scales with how
+	# badly damaged the hotspot is.
+	fx_threat_arrows.clear()
+	fx_threat_phase += delta
+	for id in hotspots:
+		var h: Dictionary = hotspots[id]
+		if not bool(h.get("assault", false)):
+			continue
+		var pos: Vector2 = h.get("pos", Vector2.ZERO)
+		var to: Vector2 = pos - player_pos
+		var dist: float = to.length()
+		var on_screen: bool = pos.x > 40.0 and pos.x < SCREEN_SIZE.x - 40.0 \
+			and pos.y > 40.0 and pos.y < SCREEN_SIZE.y - 40.0
+		var show_arrow: bool = not on_screen or dist > 320.0
+		if not show_arrow:
+			continue
+		var hp_ratio: float = float(h.get("value", 1.0)) / max(1.0, float(h.get("max_value", 1.0)))
+		var strength: float = clamp(1.0 - hp_ratio, 0.2, 1.0)
+		fx_threat_arrows.append({
+			"id": id,
+			"target_pos": pos,
+			"player_pos": player_pos,
+			"strength": strength,
+		})
+	# Push the latest threat-arrow list to the fx layer so it can render.
+	if fx_layer:
+		fx_layer._fx_set_threat_arrows(fx_threat_arrows, fx_threat_phase)
+		fx_layer._fx_mark_dirty()
+
+
+func _fx_fire_telegraph(t: Dictionary) -> void:
+	# Translate a timed-out telegraph into the real event. Mirrors the
+	# body of _trigger_event for the assault case so we don't double-trigger.
+	var id: String = str(t.get("hotspot_id", ""))
+	var kind: String = str(t.get("kind", "assault"))
+	if not hotspots.has(id):
+		return
+	var h: Dictionary = hotspots[id]
+	match kind:
+		"assault":
+			h["assault"] = true
+			h["warning"] = false
+			h["pressure"] = min(1.0, h["pressure"] + 0.15)
+			_play_sfx("breath")
+			_log("%s 被冲击。" % _hotspot_label(id))
+			Fx.shake_trigger(fx_shake, 4.0, 5.0, 24.0)
+			# Particle burst keyed to hotspot kind (window vs door vs support).
+			_fx_burst_for_kind(id, h, 1.0)
+		"breach":
+			# Forced breach — only used if some future event wants to bypass
+			# the natural value==0 path. Treat like a regular breach.
+			h["value"] = 0.0
+			h["breach_timer"] = 0.0
+
+
+func _fx_burst_for_kind(id: String, h: Dictionary, intensity: float) -> void:
+	var kind: String = h.get("kind", "")
+	var pos: Vector2 = h.get("pos", Vector2.ZERO)
+	match kind:
+		"barrier":
+			# Doors and windows are barrier hotspots. Use the hotspot id to
+			# pick the visual (cracks vs splinters).
+			if id.find("window") >= 0:
+				Fx.burst_window_crack(fx_particles, pos, intensity)
+			else:
+				Fx.burst_door_splinter(fx_particles, pos, intensity)
+		"generator":
+			Fx.burst_spark(fx_particles, pos, intensity)
+		"support":
+			# Antenna + radio + medbay + storage: amber static-ish spark.
+			Fx.burst_spark(fx_particles, pos, intensity * 0.7)
+		_:
+			Fx.burst_window_crack(fx_particles, pos, intensity)
+
+
+func _fx_damage_tier(value: float, max_value: float) -> int:
+	# 0 = pristine, 1 = light damage, 2 = heavy damage, 3 = critical
+	if max_value <= 0.0:
+		return 0
+	var ratio: float = value / max_value
+	if ratio > 0.75:
+		return 0
+	if ratio > 0.5:
+		return 1
+	if ratio > 0.25:
+		return 2
+	return 3
+
+
+# Repair-combo tick. Called every frame while the player is repairing a
+# hotspot. Accumulates fractional seconds; when a full second passes, the
+# combo step increments and the trust bonus for the new step is paid out
+# immediately (so the player feels each chain reward land).
+var _fx_combo_accum: float = 0.0
+func _fx_on_repair_tick(id: String, delta: float) -> void:
+	# Combo only applies to barriers / generator / antenna / support —
+	# radio and medbay don't take repair damage in the same way, and
+	# standing at them for a contact or healing should not snowball trust.
+	var kind: String = ""
+	if hotspots.has(id):
+		kind = String(hotspots[id].get("kind", ""))
+	if kind not in ["barrier", "generator", "antenna", "support"]:
+		return
+	fx_combo_time_left = COMBO_WINDOW
+	_fx_combo_accum += delta
+	if _fx_combo_accum >= 1.0:
+		var steps: int = int(floor(_fx_combo_accum))
+		_fx_combo_accum -= float(steps)
+		fx_combo_count += steps
+		# Trust bonus per chain step, scaled lightly so a long combo pays
+		# meaningful trust without trivialising the resource.
+		_apply_trust_delta(COMBO_TRUST_BONUS, "repair combo x%d" % fx_combo_count)
+		_log("维修连击 x%d (+%d 信任)" % [fx_combo_count, COMBO_TRUST_BONUS])
 
 
 # Seconds the player must stand on the radio to score one contact.
@@ -1577,6 +1839,11 @@ func _complete_radio_contact() -> void:
 	# Reward hook: a successful contact raises trust.
 	_apply_trust_delta(1, "radio contact")
 	_play_sfx("unlock")
+	# Visual celebration: ring burst at the radio hotspot. Soft glow so it
+	# doesn't compete with breach alarms; trust is a positive moment.
+	if hotspots.has("radio"):
+		Fx.burst_radio_contact(fx_particles, hotspots["radio"]["pos"])
+		Fx.shake_trigger(fx_shake, 2.5, 7.0, 30.0)
 	if radio_contacts_made >= radio_contact_goal:
 		radio_completed = true
 		_log("电台接通完成：%d/%d 次。" % [radio_contacts_made, radio_contact_goal])
@@ -1828,6 +2095,11 @@ func _update_hotspots(delta: float) -> void:
 			h["assault"] = false
 			# Count how many seconds the player actually spent repairing this hotspot.
 			night_stats["hotfixes"] = float(night_stats.get("hotfixes", 0.0)) + delta
+			# Repair-combo: each second spent repairing extends the combo
+			# window. Every full second adds a chain step that will pay
+			# COMBO_TRUST_BONUS trust when the player moves on. Resets if
+			# the player walks away and the timer expires.
+			_fx_on_repair_tick(id, delta)
 
 	# Background pressure decay (no events) — small slow drain
 	for id in hotspots:
@@ -1861,7 +2133,39 @@ func _update_hotspots(delta: float) -> void:
 			night_stats["breaches"] = int(night_stats.get("breaches", 0)) + 1
 			if str(night_stats.get("breaches_first_id", "")) == "":
 				night_stats["breaches_first_id"] = id
+			# Big breach explosion + heavy shake. The burst_breach helper
+			# also drops a ring so the player can SEE the breach event in
+			# addition to hearing the alarm.
+			Fx.shake_trigger(fx_shake, 12.0, 4.0, 22.0)
+			Fx.burst_breach(fx_particles, h["pos"], 1.5)
+	# Damage-tier feedback: as the hotspot takes damage and crosses each
+	# 25% threshold, spawn a small particle burst so the hit registers
+	# visually even between explicit events.
+	for id in hotspots:
+		var h: Dictionary = hotspots[id]
+		if h["breach_timer"] >= 0.0:
+			continue
+		var tier: int = _fx_damage_tier(h["value"], h["max_value"])
+		var prev: int = int(fx_last_damage_tier.get(id, 0))
+		if tier > prev:
+			# Only spawn for barrier / generator / support kinds — radio and
+			# medbay don't take damage in the same visual way.
+			if h["kind"] in ["barrier", "generator", "support"]:
+				_fx_burst_for_kind(id, h, 0.5 + 0.25 * float(tier - prev))
+				if tier == 3:
+					# Heavy shake when crossing into critical.
+					Fx.shake_trigger(fx_shake, 6.0, 5.0, 26.0)
+		fx_last_damage_tier[id] = tier
 	# Grace countdown
+	for id in hotspots:
+		var h: Dictionary = hotspots[id]
+		if h["breach_timer"] >= 0.0:
+			continue
+		# Repaired back up? Clear the breach and reset damage tracking so a
+		# later re-breach re-fires the burst properly.
+		if h["breach_timer"] >= 0.0 and h["value"] > h["max_value"] * 0.1:
+			h["breach_timer"] = -1.0
+			fx_last_damage_tier[id] = 0
 	for id in hotspots:
 		var h: Dictionary = hotspots[id]
 		if h["breach_timer"] >= 0.0:
@@ -1872,6 +2176,28 @@ func _update_hotspots(delta: float) -> void:
 
 
 func _update_events(delta: float) -> void:
+	# First pass: any assault events that are within the telegraph lead time
+	# get a warning scheduled. The telegraph's _fx_fire_telegraph actually
+	# applies the assault when its timer hits zero, which lines up with the
+	# original event.time.
+	var i: int = 0
+	while i < event_queue.size():
+		var ev: Dictionary = event_queue[i]
+		var ev_id: String = str(ev.get("id", ""))
+		var etype: String = str(ev.get("type", ""))
+		var ev_time: float = float(ev.get("time", 0.0))
+		if not events_done.has(ev_id) and etype == "assault":
+			if ev_time - night_elapsed <= FX_TELEGRAPH_LEAD_TIME and not bool(ev.get("telegraph_scheduled", false)):
+				Fx.telegraph_schedule(
+					fx_telegraphs,
+					str(ev.get("target", "")),
+					max(0.1, ev_time - night_elapsed),
+					"assault"
+				)
+				ev["telegraph_scheduled"] = true
+		i += 1
+
+	# Second pass: pop events whose time has actually arrived.
 	while not event_queue.is_empty() and event_queue[0]["time"] <= night_elapsed:
 		var ev: Dictionary = event_queue.pop_front()
 		var ev_id: String = ev["id"]
@@ -1879,6 +2205,10 @@ func _update_events(delta: float) -> void:
 			continue
 		events_done[ev_id] = true
 		night_stats["events_fired"] = int(night_stats.get("events_fired", 0)) + 1
+		# If a telegraph was scheduled for this assault, the telegraph's
+		# _fx_fire_telegraph already applied it — don't double-fire.
+		if str(ev.get("type", "")) == "assault" and bool(ev.get("telegraph_scheduled", false)):
+			continue
 		_trigger_event(ev)
 
 
