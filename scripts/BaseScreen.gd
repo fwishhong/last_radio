@@ -1377,7 +1377,14 @@ func _refresh_members() -> void:
 		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		var texture_path := str(member.get("portrait", ""))
-		portrait.texture = _load_texture(texture_path)
+		var portrait_tex: Texture2D = _load_texture(texture_path)
+		# Fallback: data/v2_members.json references res://assets/new/named/
+		# survivor_*.png files that don't exist in the repo. When the data
+		# path fails, try the close-up portrait_* shipped in
+		# assets/final/night_shift/ based on the member's name.
+		if portrait_tex == null:
+			portrait_tex = _resolve_closeup_portrait(member)
+		portrait.texture = portrait_tex
 		row.add_child(portrait)
 		var text := Label.new()
 		if _story_day1_mode():
@@ -4202,3 +4209,36 @@ func _load_texture(path: String) -> Texture2D:
 	if err != OK:
 		return null
 	return ImageTexture.create_from_image(image)
+
+
+# Map a member dict to a close-up portrait from assets/final/night_shift/.
+# The data-driven member["portrait"] references files that don't ship in
+# the repo (assets/new/named/survivor_*.png); the portrait_player/nora/
+# elias PNGs (384x384 each) are the close-ups authored for the night
+# shift character roster. Match by display name (English or Chinese) and
+# fall through to portrait_player for the default protagonist slot
+# (covers Mara Vale / Quartermaster role / anything that isn't Nora or
+# Elias — the player character stands in for unnamed roster slots).
+func _resolve_closeup_portrait(member: Dictionary) -> Texture2D:
+	var name_lower: String = str(member.get("name", "")).to_lower()
+	var id_lower: String = str(member.get("id", "")).to_lower()
+	var role_lower: String = str(member.get("role", "")).to_lower()
+	var haystack: String = "%s %s %s" % [name_lower, id_lower, role_lower]
+	# Order matters: more specific matches first, default last.
+	var candidates: Array = [
+		{"keys": ["nora", "a_qing", "pathfinder", "mechanic"], "file": "portrait_nora.png"},
+		{"keys": ["elias", "shen_luo", "radio technician"], "file": "portrait_elias.png"},
+		{"keys": [], "file": "portrait_player.png"},  # catch-all default
+	]
+	for c in candidates:
+		var keys: Array = (c as Dictionary)["keys"]
+		var matched: bool = keys.is_empty()  # empty keys = default match
+		for k in keys:
+			if haystack.find(str(k)) >= 0:
+				matched = true
+				break
+		if matched:
+			var p: String = "res://assets/final/night_shift/" + str((c as Dictionary)["file"])
+			if ResourceLoader.exists(p, "Texture2D"):
+				return load(p) as Texture2D
+	return null

@@ -1,157 +1,174 @@
 # Unused Art Inventory — Last Radio
 
-> Filed after the R2 hotspot-art audit (2026-06-20). All assets below are
-> shipped in `assets/final/night_shift/` but the runtime never references
-> them. Either they need to be wired up, or they should be marked
-> "for next chapter" / deleted to keep the repo lean.
+> Re-graded after R2 round (2026-06-20). The original flat inventory
+> disguised the fact that some assets were wired-up work and others
+> were concept art that may not ship. This doc splits them into four
+> tiers by what would actually happen if you touched them.
 
-## Quick stats
+## Tier summary
 
-- 47 PNG files in `assets/final/night_shift/` (≈3 MB) not consumed at runtime.
-- `NightShiftArt.load_upgrade_icon_textures()` loads 27 icons into
-  `art["icons"]`, but `_update_visual_feedback()` / upgrade cards /
-  event cards never read from that dict.
-- `art["hotspots"]` had the same issue until R2 hot-fix; all 36
-  hotspot textures are now consumed via `NightShiftArt.hotspot_texture_key()`.
+| Tier | Count | Action | When |
+|---|---|---|---|
+| 🔴 Regression | 3 actor_*.png | Restore v0.5 wiring | Done this PR |
+| 🟡 Wiring | 11 icons + 3 portraits | Wire into existing UI | Done this PR |
+| 🟡 Wiring | 2 hud/upgrade_frame | Replace procedural StyleBox | Later |
+| 🟢 Decide | 4 threat + 1 vignette + 4 radio | Needs design call | After playtesting |
+| ⚫ Drop | 7 overlays/waveform/shadows | Probably drop | Polish pass |
 
-## Group 1 — Upgrade / event icons (35 files)
+Total: 33 art files (was 47 — accounting error in the old doc).
 
-The `art["icons"]` and `art["events"]` buckets are loaded at startup
-but no consumer ever reads `art["icons"][key]` or `art["events"][key]`.
-Upgrade card render in `BaseScreen.gd` and the day-card picker use
-hard-coded TextLabels instead.
+---
 
-### Icon bucket — 27 keys, 8 unique source PNGs
+## 🔴 Tier 1 — Regression recovery (done this PR)
 
-`scripts/NightShiftArt.gd:45` maps keys like `door_reinforce`,
-`window_brace`, `battery_buffer` etc. to a small pool of base icons.
-The 27 entries all funnel into 8 source files:
+### `actor_player_{front,back,side}.png` — 768×1024 each
 
-| Key (consumer-facing) | Source PNG |
-|---|---|
-| `door_reinforce`, `back_door_bar`, `final_barricade` | `icon_door_reinforce.png` |
-| `window_brace`, `second_plank`, `double_brace` | `icon_window_brace.png` |
-| `battery_buffer`, `floodlights`, `signal_battery` | `icon_battery_buffer.png` |
-| `generator_tune`, `generator_cage` | `icon_generator_tune.png` |
-| `radio_booster`, `antenna_anchor`, `quiet_hours`, `cable_route`, `radio_beacon` | `icon_radio_booster.png` |
-| `workbench`, `command_routine`, `runner_path`, `elias_tools`, `all_hands` | `icon_workbench.png` |
-| `storage`, `salvage_planks`, `victor_cache` | `icon_storage.png` |
-| `medbay`, `medbay_lamp`, `nora_kit` | `icon_medbay.png` |
+**Was**: Loaded into `NightShiftGame.actor_textures` but never consumed;
+`_draw_player` always rendered walk-frame 0 when idle.
+**v0.5 status doc said** the actor system was working. **Now**: idle
+facing shows actor_front (down), actor_back (up), or actor_side with
+`flip_h` for left movement. Walk sprite takes over during translation.
+Side mirroring preserved per v0.5 spec.
 
-### Event art — 27 unique files
+Regression test: `tools/actor_regression_test.gd` — 8 assertions
+covering all 4 facings + repair-hide + missing-art fallback.
 
-`scripts/NightShiftArt.gd:76` loads `event_*.png` per key. Same
-situation: the day-card picker in `_show_day` does not draw these.
+---
 
-The full list: `event_all_hands.png`, `event_antenna_anchor.png`,
-`event_back_door_bar.png`, `event_battery_cache.png`,
-`event_cable_route.png`, `event_command_routine.png`,
-`event_door_reinforce.png`, `event_double_brace.png`,
-`event_elias_tools.png`, `event_final_barricade.png`,
-`event_find_planks.png`, `event_floodlights.png`,
-`event_generator_cage.png`, `event_generator_tune.png`,
-`event_medbay.png`, `event_medbay_lamp.png`,
-`event_nora_kit.png`, `event_quiet_hours.png`,
-`event_radio_antenna.png`, `event_radio_beacon.png`,
-`event_runner_path.png`, `event_salvage_planks.png`,
-`event_second_plank.png`, `event_signal_battery.png`,
-`event_storage.png`, `event_victor_cache.png`,
-`event_window_brace.png`, `event_workbench.png`.
+## 🟡 Tier 2 — Wire existing UI (done this PR)
 
-**To fix:** wire `_show_day` and `BaseScreen._show_upgrade_card` to
-read from `art["icons"][key]` and `art["events"][key]` (or refactor to
-inline the lookup in `NightShiftArt.upgrade_icon_key()`).
+### Icon bucket — 8 unique PNGs
 
-## Group 2 — HUD / overlay / waveform (5 files)
+**Was**: `art["icons"][card_id]` loaded by
+`NightShiftArt.load_upgrade_icon_textures()` into 27 keyed slots, but
+day-card picker used only labels.
+**Now**: each day card shows a 64×64 TextureRect with
+`art["icons"][card_id]` in the top-left corner; title shifts right by
+72px, body / cost / effects labels shift down by 40px to clear the
+badge. Skip card (`id="start"`) correctly has no icon.
 
-The HUD panel and FX overlays are drawn procedurally with `draw_rect`
-in `scripts/NightShiftGame.gd` instead of using the art assets.
+Visual proof: `screenshots/art_audit/day_with_icons.png` shows 4 cards
+on Night 2 with door / window / battery icons rendered.
 
-| File | Size | Where the runtime draws its own version |
+### `portrait_{player,nora,elias}.png` — 384×384 each
+
+**Was**: `BaseScreen` member panel loaded `member["portrait"]` from
+`data/v2_members.json` which references `res://assets/new/named/
+survivor_*.png` files that **don't exist in the repo**. Portraits were
+blank.
+**Now**: `BaseScreen._resolve_closeup_portrait()` falls back to
+`portrait_{nora,elias,player}.png` based on name keyword matching.
+Mapping:
+- `nora` / `a_qing` / `pathfinder` / `mechanic` → `portrait_nora.png`
+- `elias` / `shen_luo` / `radio technician` → `portrait_elias.png`
+- Default (Mara Vale, Victor Hale, anything else) → `portrait_player.png`
+
+Regression test: `tools/portrait_swap_test.gd` — 8 assertions covering
+each member, fallback chain, and tree walk verifying the 4 member
+panel TextureRects have non-null textures.
+
+### HUD panel + upgrade card frame — 2 PNGs
+
+**Was**: Top status bar uses ColorRect panels; day-card picker uses
+StyleBoxFlat. Replacement art exists but is purely cosmetic.
+**Recommended action**: defer to a future "polish pass" — the
+procedural versions are functional and visually consistent. If the
+art replaces them later, no test changes needed (just swap the
+texture load in `_build_ui`).
+
+---
+
+## 🟢 Tier 3 — Needs design call (defer)
+
+### `threat_*.png` (4 files: front_door, back_door, left_window, right_window)
+
+Directional threat-callout arrows. **No implementation path exists** —
+would need a new UI element distinct from the HotspotDot rings. Worth
+asking: do we want directional arrows on top of the stadium topdown,
+or is the current red/amber ring + telegraph dot system enough?
+Chapter 2 might want this; chapter 1 doesn't.
+
+### `atmosphere_vignette.png` (1 file, 41 KB)
+
+Edge-darkening overlay for night tension. **No compositing pass
+exists** — would need a CanvasLayer + TextureRect overlay modulating
+alpha with `night_elapsed`. Implementation is ~30 lines if you want
+it; otherwise it can sit unused forever.
+
+### Radio state art (4 files: idle, calling, connected, missed)
+
+Already loaded into `art["hotspots"]["radio_*"]` and addressed by
+`NightShiftArt.hotspot_texture_key()` for `kind == "radio"`, BUT the
+radio hotspot is unlocked only on Night 3+. **No existing visual
+capture proves the radio textures render.** Action: capture a Night 3+
+screenshot and confirm the radio hotspot art shows up. If yes, just
+add the proof PNG to `screenshots/art_audit/radio_states.png`.
+
+---
+
+## ⚫ Tier 4 — Probably drop
+
+### `overlay_blackout.png` + `overlay_danger_pulse.png`
+
+Gradient overlays. The runtime draws solid-color rects via `draw_rect`
+that achieve the same visual effect. Swapping in the gradient PNGs
+adds nothing the player would notice. **Recommend**: leave
+procedural, delete the PNGs in a future cleanup pass.
+
+### `radio_waveform_strip.png`
+
+Replacement for the Line2D-drawn waveform in `RadioTuningPanel.gd`.
+Engineering effort is small, visual difference is minor. **Recommend**:
+leave procedural unless playtesting shows the Line2D version reads
+poorly.
+
+### `zombie_shadow_{single,pair,crowd}.png` + `zombie_hands_reach.png`
+
+Concept art for mid-room decoration (silhouettes against walls). No
+implementation path exists; no design doc references them. The
+runtime uses 4 large `zombie_outside_*` sprites animated by
+`WorldLayerFx` instead. **Recommend**: drop unless chapter 2 wants
+interior zombie silhouettes.
+
+### `portrait_*` ↔ `character_*` confusion
+
+The repo has both `portrait_player/nora/elias.png` (384×384 close-ups,
+now wired) and `character_player/nora/elias.png` (wider framing, used
+by BaseScreen for some other path). These aren't redundant — they
+serve different framing needs. Keep both.
+
+---
+
+## Action items closed this PR
+
+- [x] Restore actor regression in `_draw_player` (Tier 1)
+- [x] Wire icon bucket into day-card picker (Tier 2)
+- [x] Swap portrait_* into BaseScreen with name-keyword fallback (Tier 2)
+- [x] Add `tools/actor_regression_test.gd` (8 assertions)
+- [x] Add `tools/portrait_swap_test.gd` (8 assertions)
+- [x] Move proof screenshots to `screenshots/art_audit/`
+
+## Action items still open
+
+- [ ] (Tier 3) Capture radio state art proof or delete the 4 PNGs
+- [ ] (Tier 3) Decide whether threat_*.png + atmosphere_vignette ship
+- [ ] (Tier 4) Eventually drop overlay/waveform/zombie_shadow PNGs
+
+## Files consumed this PR (no longer "unused")
+
+| File | Size | New consumer |
 |---|---|---|
-| `hud_status_panel.png` | 410 KB | `_draw_status_bar()` uses ColorRect panels |
-| `overlay_blackout.png` | 95 KB | `_draw_blackout_overlay()` uses `draw_rect` with alpha |
-| `overlay_danger_pulse.png` | 77 KB | `_draw_danger_overlay()` uses `draw_rect` |
-| `radio_waveform_strip.png` | 82 KB | `RadioTuningPanel.gd` uses `Line2D` shapes |
-| `upgrade_card_frame.png` | 164 KB | `BaseScreen.gd` uses `StyleBoxFlat` |
-
-**To fix:** swap procedural rectangles for the art textures where they
-improve readability, or remove the art files if procedural is preferred.
-
-## Group 3 — Radio state art (4 files)
-
-`radio_idle.png`, `radio_calling.png`, `radio_connected.png`,
-`radio_missed.png` — loaded into `art["hotspots"]["radio_*"]` and
-correctly addressed by `NightShiftArt.hotspot_texture_key()` for
-`kind == "radio"`, BUT the radio hotspot is unlocked only on Night 3+.
-The full-flow smoke test (`night_shift_full_flow_test`) verifies
-contacts on Night 3, but no existing visual capture proves the radio
-texture actually renders. Add `screenshots/art_audit/radio_states.png`
-once captured.
-
-## Group 4 — Zombie decorations (4 files)
-
-`zombie_shadow_single.png`, `zombie_shadow_pair.png`,
-`zombie_shadow_crowd.png`, `zombie_hands_reach.png` — designed as
-mid-room background decoration (silhouettes against the windows / walls).
-The runtime uses 4 large outside-zombie sprites only
-(`zombie_outside_door_approach/breach`, `zombie_outside_window_*/`),
-positioned off-screen and animated by `WorldLayerFx`.
-
-**To fix:** add a `mid_room_decoration_layer` populated at night
-start, with z-order BELOW the room background but above the world
-parallax. Or remove the files if next chapter doesn't use them.
-
-## Group 5 — Portraits (3 files)
-
-`portrait_player.png`, `portrait_nora.png`, `portrait_elias.png` —
-close-up bust versions. `BaseScreen.gd` uses the wider
-`character_*.png` set for the day picker.
-
-**To fix:** swap `BaseScreen` references to use `portrait_*` instead
-of `character_*`, or delete.
-
-## Group 6 — Actor views (3 files)
-
-`actor_player_back.png`, `actor_player_front.png`,
-`actor_player_side.png` — appear to be a top-down + 3/4 view set for
-the player. `NightShiftActors.gd` exists but is not referenced from
-`NightShiftGame._draw_player`. Player is rendered from the 12-frame
-walk sprites in `player_walk/`.
-
-**To fix:** wire `NightShiftActors` into `_draw_player` to switch
-between walk (movement) and idle (standing still) actor art. Or
-remove both `NightShiftActors.gd` and the actor PNGs.
-
-## Group 7 — Threat indicators (4 files)
-
-`threat_back_door.png`, `threat_front_door.png`,
-`threat_left_window.png`, `threat_right_window.png` — directional
-threat markers. The runtime uses red/amber rings + telegraph dots via
-`NightShiftFx` and `HotspotDot` instead.
-
-**To fix:** if Chapter 2 introduces a more visible threat-callout
-system, these become the per-barrier arrows. Otherwise remove.
-
-## Group 8 — Atmosphere vignette (1 file)
-
-`atmosphere_vignette.png` — 41 KB, designed to darken the screen
-edges at night. Currently `WorldLayerFx` only animates world-layer
-parallax; no vignette compositing pass exists.
-
-**To fix:** add a `CanvasLayer` with a `TextureRect` overlay using
-this asset, modulating alpha with night-elapsed time. Or remove.
-
-## Recommendation
-
-1. **Group 1 (icons / events):** wire in — highest payoff. The
-   `NightShiftArt` helpers are already there; this is a 1-day task.
-2. **Group 3 (radio states):** add to art audit after wiring Group 1.
-3. **Group 6 (actors):** decide between wiring for richer standing-
-   still rendering, or deleting both script + art.
-4. **Groups 2, 4, 5, 7, 8:** schedule for a future "polish pass" — none
-   are blocking release.
-
-Track as a single feature ticket:
-**"Wire remaining shipped-but-unused art assets into the night-game
-runtime"** — est. 1-2 days of focused work.
+| `actor_player_front.png` | 1.2 MB | `NightShiftGame._draw_player` idle facing down |
+| `actor_player_back.png` | 1.2 MB | `NightShiftGame._draw_player` idle facing up |
+| `actor_player_side.png` | 1.2 MB | `NightShiftGame._draw_player` idle facing left/right (mirrored) |
+| `icon_door_reinforce.png` | varies | day card: door_reinforce, back_door_bar, final_barricade |
+| `icon_window_brace.png` | varies | day card: window_brace, second_plank, double_brace |
+| `icon_battery_buffer.png` | varies | day card: battery_buffer, floodlights, signal_battery |
+| `icon_generator_tune.png` | varies | day card: generator_tune, generator_cage |
+| `icon_radio_booster.png` | varies | day card: radio_booster, antenna_anchor, quiet_hours, cable_route, radio_beacon |
+| `icon_workbench.png` | varies | day card: workbench, command_routine, runner_path, elias_tools, all_hands |
+| `icon_storage.png` | varies | day card: storage, salvage_planks, victor_cache |
+| `icon_medbay.png` | varies | day card: medbay, medbay_lamp, nora_kit |
+| `portrait_player.png` | varies | BaseScreen default fallback for Mara/Victor/others |
+| `portrait_nora.png` | varies | BaseScreen Nora Quinn / a_qing row |
+| `portrait_elias.png` | varies | BaseScreen Elias Reed / shen_luo row |

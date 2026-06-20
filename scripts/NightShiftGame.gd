@@ -132,6 +132,11 @@ var player_walk_frame: int = 0  # current frame in walk cycle (0..11)
 var player_walk_timer: float = 0.0  # accumulator for frame advance
 const PLAYER_WALK_FPS: float = 10.0  # 10 frames/sec -> 1.2s per 12-frame cycle
 const PLAYER_FRAMES_PER_DIR: int = 12
+# Idle actor art (v0.5 regression recovery). Three source PNGs at 768x1024:
+# front (facing camera, "down"), back (facing away, "up"), side (facing right;
+# mirrored for left via flip_h). Shown when player is not moving and not
+# repairing; walk sprites take over while moving.
+var actor_textures: Dictionary = {"front": null, "back": null, "side": null}
 # On-screen target size for the player + repair-action overlay. The
 # player_walk/ frames are authored at 128x160 and rendered at scale 1.0;
 # the repair-action PNGs are authored much larger (e.g. 896x1200) so the
@@ -474,6 +479,23 @@ func _build_walk_frames() -> void:
 			var p: String = ASSET_PATH + "player_walk/" + dir_name + "_" + str(i).pad_zeros(2) + ".png"
 			if ResourceLoader.exists(p):
 				walk_frames[dir_name].append(load(p) as Texture2D)
+	# Idle actor art (3 views, 768x1024 each). Player shows these when not
+	# moving; walk sprite takes over during translation. side is authored
+	# facing right; _draw_player flips it horizontally when facing left.
+	for view_name in ["front", "back", "side"]:
+		var p2: String = ASSET_PATH + "actor_player_" + view_name + ".png"
+		if ResourceLoader.exists(p2):
+			actor_textures[view_name] = load(p2) as Texture2D
+
+
+# Pick the idle-actor texture for the player's current facing. down -> front,
+# up -> back, left/right -> side (mirrored at draw time).
+func _actor_for_facing(facing: String) -> Texture2D:
+	if facing == "up":
+		return actor_textures.get("back", null)
+	if facing == "left" or facing == "right":
+		return actor_textures.get("side", null)
+	return actor_textures.get("front", null)
 
 
 # ============================================================================
@@ -1503,12 +1525,41 @@ func _show_day() -> void:
 		card_panel.add_theme_stylebox_override("panel", ps)
 		card_layer.add_child(card_panel)
 
-		var title_lbl := _make_label(Vector2(0, 0), 22, Color(0.96, 0.92, 0.78))
+		# Card icon: art["icons"][card_id] is loaded by NightShiftArt
+		# load_upgrade_icon_textures() into 27 keyed slots covering all
+		# upgrade ids (door_reinforce, window_brace, battery_buffer, etc).
+		# Skip-card has id="start" and no icon — just leave the slot empty.
+		# Icon is a 64x64 badge in the top-left; title shifts right by 70px
+		# to avoid overlap, body/effects start at y=70 below the icon row.
+		var has_icon: bool = false
+		var icons_bucket: Dictionary = art.get("icons", {}) as Dictionary
+		if icons_bucket.has(card_id):
+			var maybe: Variant = icons_bucket[card_id]
+			if maybe is Texture2D:
+				var icon_rect := TextureRect.new()
+				icon_rect.texture = maybe
+				icon_rect.position = Vector2(0, 0)
+				icon_rect.size = Vector2(64, 64)
+				icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				card_panel.add_child(icon_rect)
+				has_icon = true
+
+		# Title shifts right of the icon when present.
+		var title_x: float = 72.0 if has_icon else 0.0
+		var title_lbl := _make_label(Vector2(title_x, 0), 22, Color(0.96, 0.92, 0.78))
 		title_lbl.text = title
 		title_lbl.add_theme_constant_override("outline_size", 4)
+		title_lbl.size = Vector2(card_w - 14 - title_x, 30)
+		title_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		card_panel.add_child(title_lbl)
 
-		var body_lbl := _make_label(Vector2(0, 30), 14, Color(0.85, 0.85, 0.78))
+		# Body / cost / effects shift down by 70px when an icon is in the
+		# top-left so they don't sit underneath the badge.
+		var body_y: float = 70.0 if has_icon else 30.0
+		var cg_y: float = 120.0 if has_icon else 90.0
+		var eff_y: float = 146.0 if has_icon else 116.0
+
+		var body_lbl := _make_label(Vector2(0, body_y), 14, Color(0.85, 0.85, 0.78))
 		body_lbl.text = body
 		body_lbl.size = Vector2(card_w - 28, 50)
 		body_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1524,7 +1575,7 @@ func _show_day() -> void:
 				bottom_text += "  "
 			bottom_text += "收益：%s" % gain_text
 		var cg_lbl := _make_label(
-			Vector2(0, 90),
+			Vector2(0, cg_y),
 			13,
 			Color(0.95, 0.7, 0.5) if cost_text != "" else Color(0.7, 0.85, 0.7)
 		)
@@ -1566,7 +1617,7 @@ func _show_day() -> void:
 		if eff_lines.is_empty():
 			eff_lines.append("（无附加效果）")
 		var eff_text: String = "效果：\n· " + "\n· ".join(eff_lines)
-		var eff_lbl := _make_label(Vector2(0, 116), 12, Color(0.75, 0.82, 0.95))
+		var eff_lbl := _make_label(Vector2(0, eff_y), 12, Color(0.75, 0.82, 0.95))
 		eff_lbl.text = eff_text
 		eff_lbl.size = Vector2(card_w - 28, 80)
 		eff_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -2847,13 +2898,40 @@ func _update_visual_feedback() -> void:
 func _draw_player() -> void:
 	player_token.position = player_pos
 	# player_facing and player_walk_frame are updated in _update_player_movement.
-	# Idle (no movement) shows frame 0 of current facing; moving cycles all 12 frames.
-	# When the repair overlay is active we hide the walk sprite entirely —
-	# the repair PNGs are full repair scenes (player + door + plank + hammer),
-	# so layering them on top of the walk sprite produces a doubled body.
+	# Idle (no movement, not repairing) shows the actor_* idle art facing the
+	# current direction; moving cycles all 12 walk frames. When the repair
+	# overlay is active we hide the player sprite entirely — the repair PNGs
+	# are full repair scenes (player + door + plank + hammer), so layering
+	# them on top of the walk sprite produces a doubled body.
 	var frames: Array = walk_frames.get(player_facing, [])
 	if player_repair_active:
 		player_token.modulate.a = 0.0
+	elif not player_is_moving:
+		# Idle: prefer actor art; fall back to walk frame 0 if art is missing.
+		var actor_tex: Texture2D = _actor_for_facing(player_facing)
+		if actor_tex != null:
+			player_token.texture = actor_tex
+			# Actor PNGs are 768x1024 (vs walk sprite 128x160). Fit to the
+			# same PLAYER_TARGET_SIZE footprint so the player doesn't
+			# balloon when transitioning from walking to standing still.
+			var aw: float = float(actor_tex.get_width())
+			var ah: float = float(actor_tex.get_height())
+			if aw > 0.0 and ah > 0.0:
+				player_token.scale = Vector2(
+					PLAYER_TARGET_SIZE.x / aw,
+					PLAYER_TARGET_SIZE.y / ah
+				)
+			# Side actor is authored facing right; flip for left movement.
+			player_token.flip_h = (player_facing == "left")
+			player_token.flip_v = false
+			player_token.modulate.a = 1.0
+		elif not frames.is_empty() and frames[0] != null:
+			player_token.texture = frames[0]
+			player_token.scale = Vector2(1.0, 1.0)
+			player_token.flip_h = false
+			player_token.modulate.a = 1.0
+		else:
+			player_token.modulate.a = 0.0
 	elif not frames.is_empty() and frames[0] != null:
 		var fi: int = player_walk_frame if player_is_moving else 0
 		fi = clamp(fi, 0, frames.size() - 1)
@@ -2861,6 +2939,8 @@ func _draw_player() -> void:
 			player_token.texture = frames[fi]
 		else:
 			player_token.texture = frames[0]
+		player_token.scale = Vector2(1.0, 1.0)
+		player_token.flip_h = false
 		player_token.modulate.a = 1.0
 	else:
 		# Fallback: hide token (no colored circle in v0.5)
