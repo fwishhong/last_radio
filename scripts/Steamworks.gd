@@ -80,16 +80,24 @@ func get_unlocked_achievements() -> Array:
 # ---------- cloud save (skeleton) ----------
 
 func cloud_write(filename: String, data: PackedByteArray) -> bool:
+	if filename.is_empty():
+		push_warning("Steamworks.cloud_write: empty filename")
+		return false
 	if _enabled:
 		# Real call: Steam.fileWrite(filename, data)
 		pass
+	print("[Steam] cloud_write stub: %s (%d bytes)" % [filename, data.size()])
 	return true  # always succeed for now
 
 
 func cloud_read(filename: String) -> PackedByteArray:
+	if filename.is_empty():
+		push_warning("Steamworks.cloud_read: empty filename")
+		return PackedByteArray()
 	if _enabled:
 		# Real call: Steam.fileRead(filename)
 		pass
+	print("[Steam] cloud_read stub: %s" % filename)
 	return PackedByteArray()
 
 
