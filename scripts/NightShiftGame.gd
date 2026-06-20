@@ -12,6 +12,7 @@ const Settings := preload("res://scripts/Settings.gd")
 const Fx := preload("res://scripts/NightShiftFx.gd")
 const FxLayer := preload("res://scripts/FxLayerNode.gd")
 const WorldFx := preload("res://scripts/WorldLayerFx.gd")
+const PlayerRepairFx := preload("res://scripts/PlayerRepairFx.gd")
 
 # Effect tuning knobs. The two "lead time" / "grace" knobs are defaults —
 # runtime values come from difficulty_modifiers so casual/hard/custom
@@ -125,6 +126,12 @@ var player_walk_frame: int = 0  # current frame in walk cycle (0..11)
 var player_walk_timer: float = 0.0  # accumulator for frame advance
 const PLAYER_WALK_FPS: float = 10.0  # 10 frames/sec -> 1.2s per 12-frame cycle
 const PLAYER_FRAMES_PER_DIR: int = 12
+# Repair-action animation state (hammer swing). Visible only while
+# player is actively repairing a barrier hotspot.
+var player_repair_token: Sprite2D
+var player_repair_textures: Dictionary = {}  # {frame_id: Texture2D}
+var player_repair_active: bool = false  # true while repair ticks are firing
+var player_repair_timer: float = 0.0  # accumulator for frame cycle (sec)
 
 # Campaign state
 var resources: Dictionary = {}  # {planks, parts, battery, medicine, exposure, trust}
@@ -346,6 +353,16 @@ func _load_assets() -> void:
 	zombie_breach_window_tex = _safe_load_texture(
 		ASSET_PATH + "zombie_outside_window_breach.png"
 	)
+	# Player repair-action frames (3-frame hammer cycle).
+	player_repair_textures[PlayerRepairFx.REPAIR_FRAME_START] = _safe_load_texture(
+		ASSET_PATH + "player_repair_start.png"
+	)
+	player_repair_textures[PlayerRepairFx.REPAIR_FRAME_MID] = _safe_load_texture(
+		ASSET_PATH + "player_repair_mid.png"
+	)
+	player_repair_textures[PlayerRepairFx.REPAIR_FRAME_END] = _safe_load_texture(
+		ASSET_PATH + "player_repair_end.png"
+	)
 
 
 func _safe_load_texture(path: String) -> Texture2D:
@@ -566,6 +583,17 @@ func _build_ui() -> void:
 	player_token.scale = Vector2(1.0, 1.0)
 	player_token.texture = walk_frames.get("down", [null])[0] if not walk_frames.get("down", []).is_empty() else null
 	canvas.add_child(player_token)
+
+	# Player repair-action sprite -- drawn ON TOP of player_token so the
+	# hammer reads above the walk sprite. Hidden by default; _draw_player
+	# toggles visible + texture while repair ticks are firing.
+	player_repair_token = Sprite2D.new()
+	player_repair_token.position = player_pos
+	player_repair_token.scale = Vector2(1.0, 1.0)
+	player_repair_token.visible = false
+	player_repair_token.z_index = 1  # above walk sprite
+	player_repair_token.texture = player_repair_textures.get(PlayerRepairFx.REPAIR_FRAME_START, null)
+	canvas.add_child(player_repair_token)
 
 	# Radio contact progress panel — only visible while the player is standing
 	# at the radio hotspot and the radio is active.
@@ -2523,6 +2551,9 @@ func _update_player_target_reached() -> void:
 
 
 func _update_hotspots(delta: float) -> void:
+	# Reset per-frame repair-action flag. _draw_player reads it to
+	# decide whether to show the hammer sprite.
+	player_repair_active = false
 	# Player-side repair
 	for id in hotspots:
 		var h: Dictionary = hotspots[id]
@@ -2541,6 +2572,12 @@ func _update_hotspots(delta: float) -> void:
 			# COMBO_TRUST_BONUS trust when the player moves on. Resets if
 			# the player walks away and the timer expires.
 			_fx_on_repair_tick(id, delta)
+			# Flag the repair-action animation as active for this frame so
+			# _draw_player swaps in the hammer sprite. Only barriers get
+			# the hammer cycle (radio / medbay have their own flows).
+			if PlayerRepairFx.is_repairable_hotspot(str(h.get("kind", ""))):
+				player_repair_active = true
+				player_repair_timer += delta
 
 	# Background pressure decay (no events) — small slow drain
 	for id in hotspots:
@@ -2763,6 +2800,27 @@ func _draw_player() -> void:
 	else:
 		# Fallback: hide token (no colored circle in v0.5)
 		player_token.modulate.a = 0.0
+
+	# Repair-action overlay: visible only while player_repair_active is set
+	# (by _update_hotspots when a barrier repair tick is firing). Hidden
+	# otherwise so the walk sprite is the default.
+	if player_repair_token != null:
+		if player_repair_active:
+			var fi2: int = PlayerRepairFx.repair_frame_for(player_repair_timer)
+			var tex: Texture2D = player_repair_textures.get(fi2, null)
+			if tex != null:
+				player_repair_token.texture = tex
+			var bob: Vector2 = PlayerRepairFx.repair_bob_for(player_repair_timer)
+			var sc: Vector2 = PlayerRepairFx.repair_scale_for(player_repair_timer)
+			player_repair_token.position = player_pos + bob
+			player_repair_token.scale = sc
+			player_repair_token.modulate.a = 1.0
+			player_repair_token.visible = true
+		else:
+			player_repair_token.visible = false
+			player_repair_token.modulate.a = 0.0
+			# Reset timer so next repair starts cleanly from FRAME_START.
+			player_repair_timer = 0.0
 
 
 # ============================================================================
