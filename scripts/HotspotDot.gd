@@ -6,10 +6,10 @@ extends Node2D
 # Button is responsible for positioning; this node draws relative to (0,0).
 # We use the center of the button (36, 36) as the dot center for visual clarity.
 
-const RADIUS := 26.0
-const RING_WIDTH := 4.0
-const INNER_RADIUS := 22.0
-const CENTER := Vector2(36, 36)
+const RADIUS := 50.0
+const RING_WIDTH := 5.0
+const INNER_RADIUS := 42.0
+const CENTER := Vector2(60, 60)
 
 var _integrity: float = 1.0
 var _breached: bool = false
@@ -69,9 +69,10 @@ func _draw() -> void:
 		draw_arc(CENTER, RADIUS, -PI * 0.5, -PI * 0.5 + end_angle, 48,
 				Color(color.r, color.g, color.b, 0.95 * pulse_alpha), RING_WIDTH + 1)
 
-	# Breached: red solid center + red ring on top of the arcs
+	# Breached: just a red ring on top of the arcs (no center fill — the
+	# underlying Art TextureRect shows the broken-state illustration,
+	# e.g. front_door_broken / window_broken / generator_blackout).
 	if _breached:
-		draw_circle(CENTER, RADIUS - 2, Color(0.94, 0.27, 0.27, 0.7))
 		draw_arc(CENTER, RADIUS, 0, TAU, 48, Color(0.94, 0.27, 0.27, 0.95), RING_WIDTH)
 
 	# Current target: bright cream outer accent ring

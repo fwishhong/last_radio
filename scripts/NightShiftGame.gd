@@ -65,6 +65,12 @@ const HOTSPOT_POSITIONS := {
 	"storage": Vector2(1080, 520)
 }
 
+# Display footprint for hotspot illustrations. The source PNGs are
+# 256x256 with most of the artwork centered; displaying at 120x120 on
+# a 1280x720 screen keeps them readable without overwhelming the room.
+const HOTSPOT_ART_SIZE := Vector2(120, 120)
+const HOTSPOT_BTN_SIZE := Vector2(120, 138)  # art + 18 for the integrity bar
+
 const HOTSPOT_KIND := {
 	"front_door": "barrier",
 	"back_door": "barrier",
@@ -126,6 +132,11 @@ var player_walk_frame: int = 0  # current frame in walk cycle (0..11)
 var player_walk_timer: float = 0.0  # accumulator for frame advance
 const PLAYER_WALK_FPS: float = 10.0  # 10 frames/sec -> 1.2s per 12-frame cycle
 const PLAYER_FRAMES_PER_DIR: int = 12
+# On-screen target size for the player + repair-action overlay. The
+# player_walk/ frames are authored at 128x160 and rendered at scale 1.0;
+# the repair-action PNGs are authored much larger (e.g. 896x1200) so the
+# Sprite2D needs to be scaled DOWN to fit the same footprint.
+const PLAYER_TARGET_SIZE := Vector2(128, 160)
 # Repair-action animation state (hammer swing). Visible only while
 # player is actively repairing a barrier hotspot.
 var player_repair_token: Sprite2D
@@ -862,13 +873,16 @@ func _make_label(pos: Vector2, font_size: int, color: Color) -> Label:
 
 
 func _clear_card_layer() -> void:
-	# Use immediate `free` instead of `queue_free` so the new content
-	# built in the same call stack sees a clean card_layer. queue_free
-	# defers and was causing tests to count stale slot/difficulty panels
-	# in the day card assertions.
+	# Detach first, then queue_free. Doing `child.free()` directly is unsafe
+	# when this is called from a button's `pressed` signal handler (e.g. the
+	# Confirm button on the difficulty picker) — the button is locked while
+	# its signal is being emitted, and `free()` raises
+	#   "Attempted to free a locked object (calling or emitting)."
+	# Detach + queue_free defers the actual delete to the next idle frame,
+	# which sidesteps the lock and matches what tests already await on.
 	for child in card_layer.get_children():
 		card_layer.remove_child(child)
-		child.free()
+		child.queue_free()
 
 
 # ============================================================================
@@ -941,6 +955,9 @@ func _show_slot_picker() -> void:
 	phase = "cover"
 	_clear_card_layer()
 	card_layer.visible = true
+	# Hotspots only belong on the night map; cover/slot/difficulty pickers
+	# would otherwise show stale button rings over the background.
+	hotspot_layer.visible = false
 	if art.get("cover"):
 		bg.texture = art["cover"]
 	_play_music("cover")
@@ -1063,6 +1080,8 @@ func _show_difficulty_picker() -> void:
 	phase = "cover"
 	_clear_card_layer()
 	card_layer.visible = true
+	# Difficulty picker overlays the cover background; hide hotspots.
+	hotspot_layer.visible = false
 
 	status_label.text = I18n.t("difficulty_pick_title")
 	prompt_label.text = ""
@@ -1404,6 +1423,9 @@ func _show_day() -> void:
 	phase = "day"
 	_clear_card_layer()
 	card_layer.visible = true
+	# Day picker overlays the room background; hide the night-only hotspots
+	# so their stale state rings don't bleed through.
+	hotspot_layer.visible = false
 	if art.get("day"):
 		bg.texture = art["day"]
 	_play_music("day")
@@ -1644,6 +1666,8 @@ func _show_night() -> void:
 	phase = "night"
 	_clear_card_layer()
 	card_layer.visible = false
+	# Reveal the hotspot map now that we're back on the room layout.
+	hotspot_layer.visible = true
 	if art.get("night"):
 		bg.texture = art["night"]
 	_play_music("night_early")
@@ -1851,28 +1875,44 @@ func _zombie_tex_for(id: String, breach: bool) -> Texture2D:
 
 
 func _make_hotspot_node(id: String, data_dict: Dictionary) -> Button:
-	# Button is a Control — set its top-left so that the clickable area is centered on
-	# the hotspot's world position. We use a 72x90 control so the small integrity bar
-	# has room to sit just under the circle without spilling into the next hotspot.
+	# Button is a Control — set its top-left so that the clickable area is
+	# centered on the hotspot's world position. The button footprint is
+	# HOTSPOT_BTN_SIZE (art + a thin integrity bar). The Art TextureRect
+	# is the FIRST child so it renders BEHIND everything else; HotspotDot
+	# then draws the state overlays (progress arc, warning, target ring,
+	# locked) on top of the illustration.
 	var btn := Button.new()
 	var pos: Vector2 = data_dict["pos"]
-	btn.position = pos - Vector2(36, 36)
-	btn.size = Vector2(72, 90)
+	btn.position = pos - Vector2(HOTSPOT_ART_SIZE.x * 0.5, HOTSPOT_ART_SIZE.y * 0.5)
+	btn.size = HOTSPOT_BTN_SIZE
 	btn.flat = true
 	btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	btn.focus_mode = Control.FOCUS_NONE
 
-	# The circle (HotspotDot draws itself via _draw).
+	# ART — the actual hotspot illustration (front_door/window/generator/
+	# antenna/medbay/storage/radio). Texture is set later by
+	# _update_visual_feedback via NightShiftArt.hotspot_texture_key().
+	var art := TextureRect.new()
+	art.name = "Art"
+	art.position = Vector2(0, 0)
+	art.size = HOTSPOT_ART_SIZE
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(art)
+
+	# HotspotDot draws the state overlays (progress arc, warning ring,
+	# target ring, locked). It is sized to match the new art footprint.
 	var dot := HotspotDot.new()
 	dot.name = "Dot"
 	dot.position = Vector2(0, 0)
 	btn.add_child(dot)
 
-	# Integrity bar background (under the dot, sits in y=74..80 of the control).
+	# Integrity bar background (under the art, sits in y=120..128).
 	var bar_bg := ColorRect.new()
 	bar_bg.name = "BarBg"
-	bar_bg.position = Vector2(8, 74)
-	bar_bg.size = Vector2(56, 6)
+	bar_bg.position = Vector2(8, 124)
+	bar_bg.size = Vector2(104, 6)
 	bar_bg.color = Color(0, 0, 0, 0.6)
 	bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(bar_bg)
@@ -1880,17 +1920,17 @@ func _make_hotspot_node(id: String, data_dict: Dictionary) -> Button:
 	# Integrity bar fill
 	var bar := ColorRect.new()
 	bar.name = "Bar"
-	bar.position = Vector2(8, 74)
-	bar.size = Vector2(56, 6)
+	bar.position = Vector2(8, 124)
+	bar.size = Vector2(104, 6)
 	bar.color = Color(0.4, 0.9, 0.4)
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(bar)
 
-	# Label above the circle
+	# Label above the art
 	var lbl := Label.new()
 	lbl.name = "Label"
 	lbl.position = Vector2(-4, -22)
-	lbl.size = Vector2(80, 18)
+	lbl.size = Vector2(128, 18)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.add_theme_color_override("font_color", Color.WHITE)
 	lbl.add_theme_color_override("font_outline_color", Color.BLACK)
@@ -2452,7 +2492,7 @@ func _spawn_enemy_swarm(id: String, h: Dictionary) -> void:
 	_play_sfx("breach_alarm")
 
 
-func _dismiss_enemy_swarm(id: String) -> void:
+func _dismiss_enemy_swarm(_id: String) -> void:
 	# Let them despawn naturally on next tick
 	pass
 
@@ -2654,7 +2694,7 @@ func _update_hotspots(delta: float) -> void:
 				return
 
 
-func _update_events(delta: float) -> void:
+func _update_events(_delta: float) -> void:
 	# First pass: any assault events that are within the telegraph lead time
 	# get a warning scheduled. The telegraph's _fx_fire_telegraph actually
 	# applies the assault when its timer hits zero, which lines up with the
@@ -2736,7 +2776,7 @@ func _trigger_event(ev: Dictionary) -> void:
 
 
 func _update_visual_feedback() -> void:
-	# Per-hotspot: bar fill + circle state
+	# Per-hotspot: art texture + integrity bar + circle state overlays
 	for child in hotspot_layer.get_children():
 		if not child.has_meta("hotspot_id"):
 			continue
@@ -2745,11 +2785,31 @@ func _update_visual_feedback() -> void:
 			continue
 		var h: Dictionary = hotspots[id]
 
+		# Art texture — pick the illustration that matches the current
+		# state via NightShiftArt.hotspot_texture_key (intact / warning /
+		# assault / braced / broken for barriers; idle / low_power /
+		# blackout / repaired for generator; etc).
+		var art_node: TextureRect = child.get_node_or_null("Art") as TextureRect
+		if art_node != null:
+			var art_bucket: Dictionary = art.get("hotspots", {}) as Dictionary
+			var ctx: Dictionary = {
+				"blackout": blackout,
+				"radio_completed": radio_completed,
+				"radio_missed": radio_missed,
+				"radio_available": radio_available,
+				"player_target_id": player_target_id,
+				"player_at_target": player_at_target,
+			}
+			var tex_key: String = NightShiftArt.hotspot_texture_key(id, h, ctx)
+			var new_tex: Texture2D = art_bucket.get(tex_key, null) if tex_key != "" else null
+			if new_tex != null and art_node.texture != new_tex:
+				art_node.texture = new_tex
+
 		# Integrity bar (color + width)
 		var bar: ColorRect = child.get_node_or_null("Bar") as ColorRect
 		var pct: float = h["value"] / h["max_value"]
 		if bar:
-			bar.size.x = 56.0 * pct
+			bar.size.x = 104.0 * pct
 			if pct > 0.6:
 				bar.color = Color(0.4, 0.9, 0.4)
 			elif pct > 0.3:
@@ -2788,8 +2848,13 @@ func _draw_player() -> void:
 	player_token.position = player_pos
 	# player_facing and player_walk_frame are updated in _update_player_movement.
 	# Idle (no movement) shows frame 0 of current facing; moving cycles all 12 frames.
+	# When the repair overlay is active we hide the walk sprite entirely —
+	# the repair PNGs are full repair scenes (player + door + plank + hammer),
+	# so layering them on top of the walk sprite produces a doubled body.
 	var frames: Array = walk_frames.get(player_facing, [])
-	if not frames.is_empty() and frames[0] != null:
+	if player_repair_active:
+		player_token.modulate.a = 0.0
+	elif not frames.is_empty() and frames[0] != null:
 		var fi: int = player_walk_frame if player_is_moving else 0
 		fi = clamp(fi, 0, frames.size() - 1)
 		if frames[fi] != null:
@@ -2810,10 +2875,22 @@ func _draw_player() -> void:
 			var tex: Texture2D = player_repair_textures.get(fi2, null)
 			if tex != null:
 				player_repair_token.texture = tex
+				# Repair frames are authored larger than the player walk
+				# frames (e.g. 896x1200 vs 128x160), so scale the Sprite2D
+				# down to PLAYER_TARGET_SIZE first, then layer the
+				# cosmetic wobble from PlayerRepairFx on top. Without this
+				# fit-to-size step the texture covers most of the screen.
+				var tw: float = float(tex.get_width())
+				var th: float = float(tex.get_height())
+				if tw > 0.0 and th > 0.0:
+					var fit: Vector2 = Vector2(
+						PLAYER_TARGET_SIZE.x / tw,
+						PLAYER_TARGET_SIZE.y / th
+					)
+					var wobble: Vector2 = PlayerRepairFx.repair_scale_for(player_repair_timer)
+					player_repair_token.scale = fit * wobble
 			var bob: Vector2 = PlayerRepairFx.repair_bob_for(player_repair_timer)
-			var sc: Vector2 = PlayerRepairFx.repair_scale_for(player_repair_timer)
 			player_repair_token.position = player_pos + bob
-			player_repair_token.scale = sc
 			player_repair_token.modulate.a = 1.0
 			player_repair_token.visible = true
 		else:
@@ -2887,6 +2964,10 @@ func _show_night_report(success: bool, body: String) -> void:
 	last_report_body = body
 	_clear_card_layer()
 	card_layer.visible = true
+	# Night report uses the room background but the hotspot buttons are
+	# context for the night map only — keep them hidden so the stats panel
+	# is the focus.
+	hotspot_layer.visible = false
 	if success and art.get("report"):
 		bg.texture = art["report"]
 	elif not success and art.get("final_bad"):
@@ -2985,6 +3066,9 @@ func _show_final() -> void:
 	phase = "final"
 	_clear_card_layer()
 	card_layer.visible = true
+	# Same as night report — final screen is its own scene, hide the map
+	# hotspot buttons so the dawn illustration reads cleanly.
+	hotspot_layer.visible = false
 	if art.get("final_good"):
 		bg.texture = art["final_good"]
 	_play_music("final")
