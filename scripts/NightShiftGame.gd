@@ -1491,10 +1491,17 @@ func _show_day() -> void:
 	pickables.append(skip)
 
 	# Layout: top status, then 3 (or 4) cards in a row, then "preview effects" panel.
+	# With 4 cards at 320px each + 3x18px gaps, total is 1334 > SCREEN_SIZE.x (1280),
+	# pushing the first card off-screen. Shrink card_w when the row would overflow
+	# so n cards always fit between side_margin cushions.
 	var n: int = pickables.size()
-	var card_w: float = 320.0
 	var card_h: float = 220.0
 	var gap: float = 18.0
+	var side_margin: float = 24.0
+	var max_total_w: float = SCREEN_SIZE.x - side_margin * 2.0
+	var card_w: float = 320.0
+	if n > 1:
+		card_w = min(card_w, (max_total_w - (n - 1) * gap) / float(n))
 	var total_w: float = n * card_w + (n - 1) * gap
 	var start_x: float = (SCREEN_SIZE.x - total_w) * 0.5
 	var y: float = 130.0
