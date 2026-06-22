@@ -193,14 +193,31 @@
 
 ### 4.3 视觉资产需求
 
+> **v0.1 勘误（2026-06-22）**：spec v0.0 写成"新增 sprite"，但 verify 时发现 sprite **已经存在**了：
+>
+> - `character_nora.png` / `character_elias.png`（主立绘，248 KB / 略小）
+> - `portrait_nora.png` / `portrait_elias.png`（头像，126 KB / 略小）
+> - `event_nora_kit.png` / `event_elias_tools.png`（day card icon）
+> - `nora_walk/{up,down,left,right}_00-11.png` × 12 帧 × 4 方向 = 48 帧 walk 动画 + `nora_walk_frames.res`
+> - `elias_walk/{up,down,left,right}_00-11.png` × 12 帧 × 4 方向 + `elias_walk_frames.res`
+>
+> M12 只需**接进 NPC 状态机**，不生成新 sprite。Lily / Tom 暂未到位（M15 引入）。
+
+**现有 sprite 用途核对**（verify 后）：
+
+| sprite | 用途 | M12 接法 |
+|---|---|---|
+| `character_*.png` | 静态立绘 | 当前 idle 状态用 |
+| `portrait_*.png` | UI 头像 | 顶部 NPC 状态条左侧 |
+| `event_*.png` | day card icon | 已接 |
+| `{npc}_walk/*.png` | walk 动画 12 帧 | 走路时按帧率切换 |
+
+### 4.3.1 仍需生成的 sprite（M15 引入 Lily / Tom 时）
+
 | 角色 | sprite 需求 | 调色 |
 |---|---|---|
-| Nora | idle 2 帧 + walk 4 方向 × 4 帧 | 暖色（白大褂灰 / 暗黄头巾） |
-| Elias | idle 2 帧 + walk 4 方向 × 4 帧 | 冷色（深蓝夹克 / 耳机） |
 | Lily | idle 2 帧（无需 walk，固定位置） | 浅色（破旧卫衣） |
 | Tom | idle 2 帧 + walk 4 方向 × 4 帧 | 暗色（迷彩 / 老兵夹克） |
-
-文件命名：`assets/final/night_shift/npc_{nora,elias,lily,tom}.png` + `.import`
 
 ### 4.4 UI 状态条
 

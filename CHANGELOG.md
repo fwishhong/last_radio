@@ -76,6 +76,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tag "antenna" removed — the card only ever buffed `radio_contact_goal`,
   the old name misled players into thinking they were upgrading the
   antenna hotspot which doesn't exist yet on the night this card appears.
+- M11 (polish spec §4 / §5): NPC AI hooked into the main loop. Added
+  `NightShiftActors.decide_target` enforcing the 4 polish-spec rules
+  (emergency-only / 2s soft-commit / defer-to-player / walk-cooldown
+  1.5s), `NightShiftGame._tick_npcs(delta)` invoked from `_update_night`,
+  `npc_state` dict initialised on ally join (Nora night 2, Elias night 3).
+  Emergency gate added to `window_needing_help` so Nora only acts on
+  breach-in-progress or value<35% (was value<86, which stole the
+  player's everyday repair). Zombie visual reinforced: enemy token
+  rendered with pale-green tint and ±2 px jitter per redraw so it
+  reads as "shambling zombie", not as a person standing still.
+  `tools/npc_ai_test.gd` covers the 4 rules + per-NPC branches (10
+  assertions, all green). 22 headless test suites pass total.
+- Spec v0.1 → v0.1.1 patch: `docs/design/last_radio_v2_polish_spec.md`
+  §4.3 corrected — NPC sprite (Nora / Elias character + portrait +
+  walk frames + event icons + .res) was already on disk under
+  `assets/final/night_shift/`, never generated in M12. M12 just wires
+  it into the NPC state machine.
 
 ## [0.5.0] - 2026-06-19
 

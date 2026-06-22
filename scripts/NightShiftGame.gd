@@ -1,4 +1,4 @@
-extends Node2D
+﻿extends Node2D
 # Last Radio - Night Shift Defense (v0.5 rewrite)
 # Data-driven single-script state machine. Driven by:
 #   - data/night_shift/{resources, day_cards, chapter_01_nights, signals}.json
@@ -163,6 +163,10 @@ var unlocked_hotspots: Array = []
 var radio_contact_goal: int = 1
 var radio_window_left: float = 0.0
 var enemy_spawn_cooldown: float = 0.0
+# NPC runtime state. Keyed by npc_id ("nora", "elias"). Empty until ally joins.
+# Each entry: {pos, target, commit_timer, walk_timer, eval_timer, speed}.
+# See polish spec §4.5.
+var npc_state: Dictionary = {}
 
 # Event system (loaded from chapter_01_nights.json fixed_events)
 var event_queue: Array = []  # [{id, time, type, target, pressure}]
@@ -2110,6 +2114,7 @@ func _update_night(delta: float) -> void:
 	_update_events(delta)
 	_update_radio(delta)
 	_update_enemies(delta)
+	_tick_npcs(delta)
 	_update_visual_feedback()
 	_update_status_label()
 	_update_radio_panel()
@@ -2640,7 +2645,10 @@ func _redraw_enemy_visuals() -> void:
 		var list: Array = enemy_tokens[id]
 		for e in list:
 			var dot := Node2D.new()
-			dot.position = e["pos"]
+			# Jitter (±2 px per redraw) so the zombie read as "shambling",
+			# not as a person standing still. polish spec §5.2.
+			var jitter := Vector2(rng.randf_range(-2.0, 2.0), rng.randf_range(-2.0, 2.0))
+			dot.position = (e["pos"] as Vector2) + jitter
 			dot.set_script(_make_enemy_dot_script(float(e["size"])))
 			enemy_layer.add_child(dot)
 
@@ -2651,15 +2659,76 @@ func _make_enemy_dot_script(size: float) -> GDScript:
 extends Node2D
 func _draw() -> void:
 	var s := %f
-	# red body
-	draw_circle(Vector2.ZERO, s, Color(0.85, 0.15, 0.12, 0.95))
-	# dark inner
-	draw_circle(Vector2.ZERO, s * 0.5, Color(0.45, 0.05, 0.04, 1.0))
-	# glow
-	draw_arc(Vector2.ZERO, s * 1.4, 0, TAU, 18, Color(1.0, 0.4, 0.3, 0.45), 1.5)
+	# Pale-green body — "definitely not a person" tint (polish spec §5.2).
+	draw_circle(Vector2.ZERO, s, Color(0.55, 0.72, 0.48, 0.95))
+	# Dark-green inner
+	draw_circle(Vector2.ZERO, s * 0.5, Color(0.18, 0.32, 0.16, 1.0))
+	# Sickly glow
+	draw_arc(Vector2.ZERO, s * 1.4, 0, TAU, 18, Color(0.65, 0.85, 0.55, 0.45), 1.5)
 """ % size
 	script.reload()
 	return script
+
+
+# Called by NightShiftActors.decide_target as the `unlocked` callable.
+# Returns true when `id` is in the current night's unlocked_hotspots.
+func _is_unlocked(id: String) -> bool:
+	return unlocked_hotspots.has(id)
+
+
+# Per-NPC tick. Implements polish spec §4.2 rules 1-4 via
+# NightShiftActors.decide_target + state-machine timers. Behaviour is
+# intentionally light: emergency-only target pick, soft-lock 2s after a
+# target change, defer to player, walk cooldown 1.5s after a target change.
+# When close enough to the target hotspot, the NPC softly restores value
+# (Nora ~12/s on windows, Elias ~10/s on antenna/radio) and clears the
+# breach_timer if it had started ticking down.
+func _tick_npcs(delta: float) -> void:
+	if npc_state.is_empty():
+		return
+	var unlocked := Callable(self, "_is_unlocked")
+	var antenna_low: bool = hotspots.has("antenna") and \
+			float(hotspots["antenna"].get("value", 100.0)) < 30.0
+	for npc_id in npc_state.keys():
+		var st: Dictionary = npc_state[npc_id]
+		# Tick the timers down.
+		if float(st.get("commit_timer", 0.0)) > 0.0:
+			st["commit_timer"] = float(st["commit_timer"]) - delta
+		if float(st.get("walk_timer", 0.0)) > 0.0:
+			st["walk_timer"] = float(st["walk_timer"]) - delta
+		# Re-evaluate target every ~0.2s (decide_target internally enforces
+		# the soft-commit 2s window).
+		var eval_t: float = float(st.get("eval_timer", 0.0)) - delta
+		if eval_t <= 0.0:
+			st["eval_timer"] = 0.2
+			var want: String = NightShiftActors.decide_target(
+					npc_id, hotspots, unlocked, player_target_id, npc_state,
+					hotspots.has("radio"), radio_completed, blackout, antenna_low, {})
+			if want != st.get("target", ""):
+				st["target"] = want
+				st["commit_timer"] = 2.0
+				st["walk_timer"] = 1.5
+		# Walk toward target when walk cooldown is over.
+		var tgt_id: String = str(st.get("target", ""))
+		if tgt_id != "" and hotspots.has(tgt_id) and float(st.get("walk_timer", 0.0)) <= 0.0:
+			var hp: Dictionary = hotspots[tgt_id]
+			var np: Vector2 = st["pos"]
+			var tp: Vector2 = hp["pos"]
+			var d := tp - np
+			if d.length() > 40.0:
+				st["pos"] = np + d.normalized() * float(st.get("speed", 180.0)) * delta
+			else:
+				# Close enough — softly repair and clear breach countdown.
+				var rate: float = 12.0
+				if npc_id == "elias":
+					rate = 10.0
+				var cur: float = float(hp.get("value", 100.0))
+				var cap: float = float(hp.get("max_value", 100.0))
+				hp["value"] = min(cap, cur + rate * delta)
+				if float(hp.get("breach_timer", -1.0)) >= 0.0:
+					hp["breach_timer"] = -1.0
+				hotspots[tgt_id] = hp
+		npc_state[npc_id] = st
 
 
 func _update_player_movement(delta: float) -> void:
@@ -3101,12 +3170,32 @@ func _end_night(success: bool) -> void:
 						_unlock_ach("recruit_nora")
 					elif u == "elias" and not _ach_recruit_elias:
 						_ach_recruit_elias = true
-						_unlock_ach("recruit_elias")
+						_unlock_ach("elias_recruit")
 					if bool(allies.get("nora", false)) and bool(allies.get("elias", false)) and bool(allies.get("victor", false)):
 						if not _ach_all_three:
 							_ach_all_three = true
 							_unlock_ach("all_three_allies")
-				_log("%s 加入" % ("Nora" if u == "nora" else "Elias"))
+					_log("%s 加入" % ("Nora" if u == "nora" else "Elias"))
+					# Initialise runtime state for the new NPC. Default position
+					# mirrors spec §4.5 — Nora on the right flank, Elias on the left.
+					if u == "nora" and not npc_state.has("nora"):
+						npc_state["nora"] = {
+							"pos": Vector2(800.0, 360.0),
+							"target": "",
+							"commit_timer": 0.0,
+							"walk_timer": 0.0,
+							"eval_timer": 0.2,
+							"speed": 180.0,
+						}
+					elif u == "elias" and not npc_state.has("elias"):
+						npc_state["elias"] = {
+							"pos": Vector2(480.0, 360.0),
+							"target": "",
+							"commit_timer": 0.0,
+							"walk_timer": 0.0,
+							"eval_timer": 0.2,
+							"speed": 180.0,
+						}
 			elif u in ["right_window", "back_door", "radio", "antenna", "medbay", "storage"]:
 				if not unlocked_hotspots.has(u):
 					unlocked_hotspots.append(u)
