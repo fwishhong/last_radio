@@ -171,6 +171,23 @@ var events_done: Dictionary = {}
 # Per-night stats (for the failure/success report screen)
 var night_stats: Dictionary = {}  # {radio_contacts, enemies_killed, hotfixes, breaches, breaches_first_id}
 
+# Cumulative breach count across the run (for the no_breach achievement).
+# Each night bumps this in _end_night from night_stats["breaches"]; the
+# no_breach achievement fires on chapter clear when this is still 0.
+var total_breaches: int = 0
+
+# Achievement single-fire flags. Each guard ensures the trigger site only
+# unlocks once per run; Steamworks.unlock_achievement also guards
+# internally but the local flag keeps the trigger clean.
+var _ach_first_contact: bool = false
+var _ach_reach_victor: bool = false
+var _ach_recruit_nora: bool = false
+var _ach_recruit_elias: bool = false
+var _ach_all_three: bool = false
+var _ach_first_night: bool = false
+var _ach_clear_all: bool = false
+var _ach_no_breach: bool = false
+
 var rng := RandomNumberGenerator.new()
 
 # ============================================================================
@@ -189,6 +206,10 @@ var player_token: Sprite2D
 var card_layer: Control
 var music_player: AudioStreamPlayer
 var sfx_player: AudioStreamPlayer
+# When true, _process watches music_player and swaps in the looping
+# `music_report` bed once the one-shot success/failure sting finishes.
+# Set by _end_night and _show_night_report; cleared once the swap happens.
+var _pending_report_music: bool = false
 var flash_rect: ColorRect  # blackout / danger pulse
 var radio_panel: Panel  # contact progress panel (only visible at the radio)
 var radio_progress_bar: ColorRect
@@ -266,6 +287,9 @@ const DAWN_FADE_DURATION := 1.5
 # FOOTSTEP_INTERVAL seconds while moving. Cheap — each puff is 2-3 short-
 # life particles with downward gravity.
 var fx_footstep_accum: float = 0.0
+# Counts consecutive footstep puffs — used to alternate L/R phase so a
+# future cadence change can map even/odd steps to different SFX variants.
+var fx_footstep_phase: int = 0
 const FOOTSTEP_INTERVAL := 0.28
 
 # ============================================================================
@@ -412,7 +436,10 @@ func _load_hotspot_arts() -> void:
 
 
 func _load_audio() -> void:
-	var tracks := ["cover", "day", "night_early", "night_final", "final"]
+	var tracks := [
+		"cover", "day", "night_early", "night_final", "final",
+		"success", "failure", "report",
+	]
 	for t in tracks:
 		var p: String = AUDIO_PATH + "music_" + t + ".mp3"
 		if ResourceLoader.exists(p):
@@ -420,6 +447,8 @@ func _load_audio() -> void:
 			if s:
 				s = s.duplicate()
 				if "loop" in s:
+					# Music tracks default to looping; one-shot stings (success/
+					# failure) override this per-call via _play_music(track, false).
 					s.set("loop", true)
 				audio_streams[t] = s
 	# ambient
@@ -436,12 +465,17 @@ func _load_audio() -> void:
 	sfx_streams = NightShiftSfx.build_all()
 
 
-func _play_music(track: String) -> void:
+func _play_music(track: String, looped: bool = true) -> void:
 	if music_player == null:
 		return
 	music_player.stop()
 	if track in audio_streams and audio_streams[track]:
-		music_player.stream = audio_streams[track]
+		var s: AudioStream = audio_streams[track]
+		# Override loop flag per-call so success/failure stings can play
+		# non-looped while background tracks (cover/day/night_*) keep looping.
+		if "loop" in s:
+			s.set("loop", looped)
+		music_player.stream = s
 		music_player.play()
 
 
@@ -1362,7 +1396,15 @@ func _apply_ng_plus_bonus() -> void:
 		if resources[k] is int or resources[k] is float:
 			resources[k] = int(resources[k]) + 1 * ng_plus_count
 	# Trust a little higher
-	allies["nora"] = true
+	if not bool(allies.get("nora", false)):
+		allies["nora"] = true
+		if not _ach_recruit_nora:
+			_ach_recruit_nora = true
+			_unlock_ach("recruit_nora")
+		if bool(allies.get("nora", false)) and bool(allies.get("elias", false)) and bool(allies.get("victor", false)):
+			if not _ach_all_three:
+				_ach_all_three = true
+				_unlock_ach("all_three_allies")
 	_log("New Game+ bonus: +%d to each starting resource, Nora starts available." % ng_plus_count)
 
 
@@ -2034,6 +2076,15 @@ func _on_hotspot_pressed(id: String) -> void:
 # ============================================================================
 
 func _process(delta: float) -> void:
+	# Report-music transition: when a one-shot success/failure sting ends,
+	# the looping `music_report` bed takes over so the report screen has
+	# its own ambient music instead of silence. Flag-based polling is more
+	# robust than `await music_player.finished` because it survives the
+	# player advancing to day or retrying mid-sting.
+	if _pending_report_music and music_player:
+		if not music_player.playing:
+			_play_music("report", true)
+			_pending_report_music = false
 	if phase == "night":
 		_update_night(delta)
 
@@ -2155,6 +2206,10 @@ func _fx_tick(delta: float) -> void:
 				fx_particles, foot, Vector2(-4.0 + randf() * 8.0, -6.0 - randf() * 4.0),
 				0.28, Color(0.75, 0.68, 0.55, 0.5), 1.2, Fx.PARTICLE_KIND_DOT, 80.0
 			)
+			# One SFX per dust puff (alternates phase so a left/right pattern
+			# is possible later). Cheap: the stream's already loaded.
+			_play_sfx("footstep")
+			fx_footstep_phase += 1
 	else:
 		# Drain the accumulator while idle so the first step after a long
 		# pause doesn't immediately spit a cloud of dust.
@@ -2340,6 +2395,9 @@ func _fx_on_repair_tick(id: String, delta: float) -> void:
 		fx_combo_count += steps
 		# Trust bonus per chain step, scaled lightly so a long combo pays
 		# meaningful trust without trivialising the resource.
+		# Wood-plank nail SFX fires once per combo step (not every frame) so
+		# the player gets a percussive hit on each chain payout.
+		_play_sfx("wood_plank_nail")
 		_apply_trust_delta(COMBO_TRUST_BONUS, "repair combo x%d" % fx_combo_count)
 		_log("维修连击 x%d (+%d 信任)" % [fx_combo_count, COMBO_TRUST_BONUS])
 
@@ -2398,6 +2456,12 @@ func _complete_radio_contact() -> void:
 	radio_contact_progress = 0.0
 	radio_contacts_made += 1
 	night_stats["radio_contacts"] = int(night_stats.get("radio_contacts", 0)) + 1
+	if not _ach_first_contact:
+		_ach_first_contact = true
+		_unlock_ach("first_contact")
+	if radio_target_channel == "victor" and not _ach_reach_victor:
+		_ach_reach_victor = true
+		_unlock_ach("reach_victor")
 	# Reward hook: a successful contact raises trust.
 	_apply_trust_delta(1, "radio contact")
 	_play_sfx("unlock")
@@ -2995,6 +3059,14 @@ func _end_night(success: bool) -> void:
 	phase = "night_report"
 	survived = success
 	_play_sfx("unlock" if success else "fail")
+	# One-shot sting: success/failure track plays once (not looped), then the
+	# report-screen loop bed (`music_report`) takes over once the sting ends.
+	# _pending_report_music is checked in _process and triggers the transition.
+	if success:
+		_play_music("success", false)
+	else:
+		_play_music("failure", false)
+	_pending_report_music = true
 	# Dawn fade: only on success — a failed night shouldn't get the warm
 	# sunrise, the player needs to feel the failure state.
 	if success:
@@ -3008,12 +3080,41 @@ func _end_night(success: bool) -> void:
 		for unlock in night_def.get("success_unlocks", []):
 			var u: String = str(unlock)
 			if u in ["nora", "elias"]:
-				allies[u] = true
+				if not bool(allies.get(u, false)):
+					allies[u] = true
+					if u == "nora" and not _ach_recruit_nora:
+						_ach_recruit_nora = true
+						_unlock_ach("recruit_nora")
+					elif u == "elias" and not _ach_recruit_elias:
+						_ach_recruit_elias = true
+						_unlock_ach("recruit_elias")
+					if bool(allies.get("nora", false)) and bool(allies.get("elias", false)) and bool(allies.get("victor", false)):
+						if not _ach_all_three:
+							_ach_all_three = true
+							_unlock_ach("all_three_allies")
 				_log("%s 加入" % ("Nora" if u == "nora" else "Elias"))
 			elif u in ["right_window", "back_door", "radio", "antenna", "medbay", "storage"]:
 				if not unlocked_hotspots.has(u):
 					unlocked_hotspots.append(u)
 					_log("解锁：%s" % _hotspot_label(u))
+		# Check all-three-allies AFTER the loop so a single night that unlocks
+		# both nora + elias (rare but possible) still fires the achievement.
+		if bool(allies.get("nora", false)) and bool(allies.get("elias", false)) and bool(allies.get("victor", false)):
+			if not _ach_all_three:
+				_ach_all_three = true
+				_unlock_ach("all_three_allies")
+		# Achievement triggers tied to night-end (success only).
+		if night_index == 0 and not _ach_first_night:
+			_ach_first_night = true
+			_unlock_ach("first_night")
+		total_breaches += int(night_stats.get("breaches", 0))
+		if night_index + 1 >= night_count:
+			if not _ach_clear_all:
+				_ach_clear_all = true
+				_unlock_ach("clear_all_nights")
+			if total_breaches == 0 and not _ach_no_breach:
+				_ach_no_breach = true
+				_unlock_ach("no_breach")
 
 	# Pick report text from level data — uses the localized _en variant when
 	# the locale is en, otherwise the Chinese original.
@@ -3059,7 +3160,12 @@ func _show_night_report(success: bool, body: String) -> void:
 		bg.texture = art["report"]
 	elif not success and art.get("final_bad"):
 		bg.texture = art["final_bad"]
-	_play_music("final" if success else "final")
+	# Bug fix: was `_play_music("final" if success else "final")` — both
+	# branches played the chapter-complete track on every night end. Now the
+	# sting (success/failure) plays one-shot, and the looping `music_report`
+	# bed takes over once the sting ends (see _process/_pending_report_music).
+	_play_music("success" if success else "failure", false)
+	_pending_report_music = true
 
 	var level: Dictionary = NightShiftLevels.LEVELS[night_index]
 	var night_def: Dictionary = data.get_night(night_index)
@@ -3227,6 +3333,17 @@ func _log(msg: String) -> void:
 	if logs.size() > 6:
 		logs.pop_front()
 	log_label.text = "\n".join(logs)
+
+
+func _unlock_ach(id: String) -> void:
+	# Thin facade so all 8 trigger sites have one place to call. Steamworks
+	# is registered as an autoload (project.godot:21); resolve via the
+	# scene-tree path so headless --script runs without an autoload also work.
+	var node: Node = get_node_or_null("/root/Steamworks")
+	if node == null:
+		node = Engine.get_singleton("Steamworks") if Engine.has_singleton("Steamworks") else null
+	if node and node.has_method("unlock_achievement"):
+		node.unlock_achievement(id)
 
 
 func _update_status_label() -> void:

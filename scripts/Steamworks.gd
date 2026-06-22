@@ -15,6 +15,9 @@ extends Node
 #
 # For now: every method either logs (debug) or no-ops. The interface stays
 # the same, so swapping is a one-file change.
+#
+# Chapter 1 ships with 8 reachable achievements. NG+ and Hard-Mode clears
+# are intentionally out of scope until those modes land.
 
 const ACHIEVEMENT_IDS := {
 	"first_night": "ACH_FIRST_NIGHT",
@@ -25,8 +28,6 @@ const ACHIEVEMENT_IDS := {
 	"no_breach": "ACH_FLAWLESS",
 	"first_contact": "ACH_FIRST_CONTACT",
 	"reach_victor": "ACH_VICTOR",
-	"hard_clear": "ACH_HARD_CLEAR",
-	"ng_plus_one": "ACH_NG_PLUS_1",
 }
 
 var _enabled: bool = false

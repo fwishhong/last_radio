@@ -623,14 +623,14 @@ func _build_slots(root: VBoxContainer) -> void:
 	member_row.add_theme_constant_override("separation", 8)
 	rows.add_child(member_row)
 	for index in range(2):
-		member_row.add_child(_slot_card("成员", _member_slot_text(index), _member_slot_texture(index), index < selected_member_ids.size()))
+		member_row.add_child(_slot_card("成员", _member_slot_text(index), _member_slot_avatar(index), index < selected_member_ids.size()))
 	var item_row := HBoxContainer.new()
 	item_row.add_theme_constant_override("separation", 8)
 	rows.add_child(item_row)
 	for index in range(2):
-		item_row.add_child(_slot_card("装备", _item_slot_text(index), _item_slot_texture(index), index < selected_item_ids.size()))
+		item_row.add_child(_slot_card("装备", _item_slot_text(index), _item_slot_avatar(index), index < selected_item_ids.size()))
 
-func _slot_card(label: String, value: String, texture: Texture2D, filled: bool) -> PanelContainer:
+func _slot_card(label: String, value: String, avatar: Control, filled: bool) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.custom_minimum_size = Vector2(0, 44)
@@ -645,11 +645,8 @@ func _slot_card(label: String, value: String, texture: Texture2D, filled: bool) 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	margin.add_child(row)
-	var avatar := TextureRect.new()
-	avatar.custom_minimum_size = Vector2(30, 30)
-	avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	avatar.texture = texture
+	if avatar == null:
+		avatar = _empty_slot_avatar()
 	row.add_child(avatar)
 	var text := Label.new()
 	text.text = "%s\n%s" % [label, value]
@@ -658,6 +655,18 @@ func _slot_card(label: String, value: String, texture: Texture2D, filled: bool) 
 	text.add_theme_color_override("font_color", Color(0.84, 0.94, 0.90))
 	row.add_child(text)
 	return panel
+
+
+# Returns the avatar Control for a dispatch slot: a colored glyph badge
+# for member slots, an item TextureRect for equipment slots, or an
+# empty 30x30 placeholder if the slot is unfilled. Keeps the slot
+# layout identical to the old TextureRect-based version.
+func _empty_slot_avatar() -> Control:
+	var rect := ColorRect.new()
+	rect.custom_minimum_size = Vector2(30, 30)
+	rect.size = Vector2(30, 30)
+	rect.color = Color(0.18, 0.22, 0.20, 0.65)
+	return rect
 
 func _build_member_pool(root: VBoxContainer) -> void:
 	var title := Label.new()
@@ -815,12 +824,9 @@ func _member_card(member_id: String, member: Dictionary, fit: int) -> Button:
 	row.add_theme_constant_override("separation", 8)
 	margin.add_child(row)
 
-	var avatar := TextureRect.new()
+	var glyph := _resolve_member_glyph(member)
+	var avatar := _build_glyph_badge(glyph["letter"], glyph["color"], 42)
 	avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	avatar.custom_minimum_size = Vector2(42, 42)
-	avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	avatar.texture = _load_texture(str(member.get("portrait", "")))
 	row.add_child(avatar)
 
 	var info := VBoxContainer.new()
@@ -1232,12 +1238,13 @@ func _item_slot_text(index: int) -> String:
 	var item_id := selected_item_ids[index]
 	return str(items.get(str(item_id), {}).get("name", item_id))
 
-func _member_slot_texture(index: int) -> Texture2D:
+func _member_slot_avatar(index: int) -> Control:
 	if index >= selected_member_ids.size():
-		return null
+		return _empty_slot_avatar()
 	var member_id := selected_member_ids[index]
 	var member: Dictionary = members.get(str(member_id), {})
-	return _load_texture(str(member.get("portrait", "")))
+	var glyph := _resolve_member_glyph(member)
+	return _build_glyph_badge(glyph["letter"], glyph["color"], 30)
 
 func _item_slot_texture(index: int) -> Texture2D:
 	if index >= selected_item_ids.size():
@@ -1245,6 +1252,67 @@ func _item_slot_texture(index: int) -> Texture2D:
 	var item_id := selected_item_ids[index]
 	var item: Dictionary = items.get(str(item_id), {})
 	return _load_texture(str(item.get("icon", "")))
+
+func _item_slot_avatar(index: int) -> Control:
+	var tex := _item_slot_texture(index)
+	if tex == null:
+		return _empty_slot_avatar()
+	var rect := TextureRect.new()
+	rect.custom_minimum_size = Vector2(30, 30)
+	rect.size = Vector2(30, 30)
+	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	rect.texture = tex
+	return rect
+
+# Map a member dict to a UI-safe "name initial + role color" glyph spec.
+# Same role-keyword map as BaseScreen so the BaseScreen member chip
+# and the DispatchPanel member card stay visually consistent.
+func _resolve_member_glyph(member: Dictionary) -> Dictionary:
+	var name_text: String = str(member.get("name", ""))
+	var letter := "?"
+	if name_text.length() > 0:
+		letter = name_text.substr(0, 1).to_upper()
+	return {"letter": letter, "color": _role_color(str(member.get("role", "")))}
+
+func _role_color(role: String) -> Color:
+	var haystack := role.to_lower()
+	if haystack.find("radio") >= 0:
+		return Color(1.0, 0.84, 0.45)
+	if haystack.find("medic") >= 0 or haystack.find("medical") >= 0:
+		return Color(0.85, 0.40, 0.40)
+	if haystack.find("quartermaster") >= 0 or haystack.find("trade") >= 0 or haystack.find("scavenger") >= 0:
+		return Color(0.45, 0.55, 0.70)
+	if haystack.find("mechanic") >= 0 or haystack.find("pathfinder") >= 0 or haystack.find("repair") >= 0:
+		return Color(0.40, 0.70, 0.55)
+	return Color(0.55, 0.55, 0.55)
+
+func _build_glyph_badge(letter: String, color: Color, size: int) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(size, size)
+	panel.size = Vector2(size, size)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(color.r, color.g, color.b, 0.85)
+	style.border_color = Color(color.r * 0.6, color.g * 0.6, color.b * 0.6, 0.95)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_left = 4
+	style.corner_radius_bottom_right = 4
+	panel.add_theme_stylebox_override("panel", style)
+	var label := Label.new()
+	label.text = letter
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	label.add_theme_font_size_override("font_size", max(14, int(size * 0.5)))
+	label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+	panel.add_child(label)
+	return panel
 
 func _load_texture(path: String) -> Texture2D:
 	if path == "":
