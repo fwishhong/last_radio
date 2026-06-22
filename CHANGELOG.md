@@ -66,6 +66,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   success_unlocks); phase 5 resets `breach_timer` back to -1 before
   `_show_night_report(true)` so phase 6's `_process` swap isn't masked
   by a re-triggered `_end_night(false)`. 19/19 audio assertions pass.
+- Day-card picker gate: added `requires_unlocked` field to 7 hotspot-targeted
+  cards (`radio_booster`, `antenna_anchor`, `back_door_bar`, `medbay_lamp`,
+  `victor_cache`, `signal_battery`, `cable_route`); NightShiftGame
+  `_show_day` filters cards through `_card_unlocked_for_now` so cards like
+  "Anchor Antenna" / "Re-route Cables" no longer show on night 3 before
+  the antenna unlocks. Card name fix: `radio_booster` 中文名
+  "架高天线" → "校准电台" (en: "Raise the Antenna" → "Tune the Radio"),
+  tag "antenna" removed — the card only ever buffed `radio_contact_goal`,
+  the old name misled players into thinking they were upgrading the
+  antenna hotspot which doesn't exist yet on the night this card appears.
 
 ## [0.5.0] - 2026-06-19
 

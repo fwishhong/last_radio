@@ -1477,6 +1477,20 @@ func _on_start_pressed() -> void:
 # PHASE: day
 # ============================================================================
 
+# Day-card gate: a card with `requires_unlocked: ["antenna", ...]` only appears
+# once every hotspot in that list is in `unlocked_hotspots`. Prevents
+# "Anchor Antenna" / "Signal Battery" / "Re-route Cables" from showing on
+# night 3 before antenna unlocks. Cards without the field are unconstrained.
+func _card_unlocked_for_now(card: Dictionary) -> bool:
+	var req: Variant = card.get("requires_unlocked", [])
+	if not (req is Array) or (req as Array).is_empty():
+		return true
+	for h in (req as Array):
+		if not unlocked_hotspots.has(str(h)):
+			return false
+	return true
+
+
 func _show_day() -> void:
 	# Permanent diagnostic probe — count how many times _show_day fires per
 	# probe-window. The number tells which caller (1 = ready, 2 = confim,
@@ -1510,14 +1524,14 @@ func _show_day() -> void:
 			if cid == "start":
 				continue
 			var card: Dictionary = data.get_card(cid)
-			if not card.is_empty():
+			if not card.is_empty() and _card_unlocked_for_now(card):
 				pickables.append(card)
 		elif entry is String:
 			var cid2: String = str(entry)
 			if cid2 == "start":
 				continue
 			var card2: Dictionary = data.get_card(cid2)
-			if not card2.is_empty():
+			if not card2.is_empty() and _card_unlocked_for_now(card2):
 				pickables.append(card2)
 	# Always add a "skip" card as the last option
 	var skip := {
