@@ -207,6 +207,13 @@ var prompt_label: Label
 var hotspot_layer: Node2D
 var enemy_layer: Node2D
 var player_token: Sprite2D
+# Procedural hammer sprite that sits next to the player_token during
+# repair ticks. Sits ABOVE player_token (z=1) and BELOW the FX/critical
+# overlay (z=4/5). Driven by _draw_player with the same
+# PlayerRepairFx REPAIR_CYCLE_SEC phase the FX layer uses. Typed as
+# Node2D rather than HammerSprite to avoid a hard class_name cache
+# dependency on a freshly-added script.
+var hammer_sprite: Node2D
 var card_layer: Control
 var music_player: AudioStreamPlayer
 var sfx_player: AudioStreamPlayer
@@ -286,6 +293,18 @@ var fx_static_target: float = 0.0  # target alpha (0 or 0.55, lerp toward this)
 var fx_dawn_alpha: float = 0.0
 var fx_dawn_target: float = 0.0
 const DAWN_FADE_DURATION := 1.5
+# Procedural background warning scheduler -- ensures night 2+ has a
+# constant drip of incoming threats so the player is never idle for
+# long stretches. _show_night() resets _proc_next_warning_at to -1.0
+# which forces re-initialization on the first _update_events tick.
+# Per-hotspot cooldown lives on hotspot["proc_cooldown"] so the
+# scheduler never piles multiple warnings on the same door/window.
+# round-2 pacing fix: night 2-10 used to have only 2-3 fixed events
+# per 120-180s night, leaving the player with 40-90s of dead air.
+var _proc_next_warning_at: float = -1.0
+const PROC_WARNING_INTERVAL_MIN := 6.0
+const PROC_WARNING_INTERVAL_MAX := 10.0
+const PROC_HOTSPOT_COOLDOWN := 25.0
 
 # Footstep dust: small puffs kicked up at the player's feet every
 # FOOTSTEP_INTERVAL seconds while moving. Cheap — each puff is 2-3 short-
@@ -665,6 +684,19 @@ func _build_ui() -> void:
 	player_repair_token.z_index = 1  # above walk sprite
 	player_repair_token.texture = player_repair_textures.get(PlayerRepairFx.REPAIR_FRAME_START, null)
 	canvas.add_child(player_repair_token)
+
+	# Procedural hammer sprite -- the player_token itself stays perfectly
+	# still (no tilt / bob) during repair; this hammer rotates next to
+	# the player so the swing reads visually without warping the
+	# silhouette. Permanent visible=false; _draw_player toggles it on
+	# during repair ticks. polish spec §4.5 / round-2 visual fix.
+	const HammerSpriteScript := preload("res://scripts/HammerSprite.gd")
+	hammer_sprite = HammerSpriteScript.new()
+	hammer_sprite.name = "HammerSprite"
+	hammer_sprite.position = player_pos
+	hammer_sprite.visible = false
+	hammer_sprite.z_index = 1  # above walk sprite, same as old repair_token
+	canvas.add_child(hammer_sprite)
 
 	# Radio contact progress panel — only visible while the player is standing
 	# at the radio hotspot and the radio is active.
@@ -1788,6 +1820,18 @@ func _show_night() -> void:
 	hotspot_layer.visible = true
 	if art.get("night"):
 		bg.texture = art["night"]
+	# Reset the dawn-fade overlay from the previous night. Without this
+	# a successful night-1 dawn fade would carry over to night 2+ and
+	# cover the whole screen with a warm/white tint for the entire
+	# duration of the next night. round-2 visual fix.
+	fx_dawn_target = 0.0
+	fx_dawn_alpha = 0.0
+	# Reset the procedural background event scheduler so night 2+ has
+	# a fresh cadence of background warnings (see _update_events).
+	_proc_next_warning_at = -1.0
+	for id in hotspots:
+		if hotspots[id].has("proc_cooldown"):
+			hotspots[id]["proc_cooldown"] = 0.0
 	_play_music("night_early")
 
 	var level: Dictionary = NightShiftLevels.LEVELS[night_index]
@@ -2899,7 +2943,7 @@ func _update_hotspots(delta: float) -> void:
 				return
 
 
-func _update_events(_delta: float) -> void:
+func _update_events(delta: float) -> void:
 	# First pass: any assault events that are within the telegraph lead time
 	# get a warning scheduled. The telegraph's _fx_fire_telegraph actually
 	# applies the assault when its timer hits zero, which lines up with the
@@ -2934,6 +2978,75 @@ func _update_events(_delta: float) -> void:
 		if str(ev.get("type", "")) == "assault" and bool(ev.get("telegraph_scheduled", false)):
 			continue
 		_trigger_event(ev)
+
+	# Third pass: procedural background warnings. Decays per-hotspot
+	# cooldowns, then if the scheduler has reached the next-fire time
+	# (or the night just started, when _proc_next_warning_at == -1.0)
+	# picks a random eligible barrier hotspot and triggers a warning.
+	# This is the round-2 pacing fix: night 2-10 used to have 40-90s
+	# of dead air between fixed events; now we drip a fresh warning
+	# every 6-10s so the player is always within one teleport of
+	# needing to run.
+	_proc_tick_background_warnings(delta)
+
+
+func _proc_tick_background_warnings(delta: float) -> void:
+	# Decay per-hotspot cooldowns.
+	for id in hotspots:
+		var h: Dictionary = hotspots[id]
+		var cd: float = float(h.get("proc_cooldown", 0.0))
+		if cd > 0.0:
+			h["proc_cooldown"] = max(0.0, cd - delta)
+	# Initialize the scheduler on the first tick of a fresh night so
+	# the first procedural warning lands ~8s in (gives the player a
+	# brief moment to breathe + orients to the room).
+	if _proc_next_warning_at < 0.0:
+		_proc_next_warning_at = night_elapsed + 8.0
+		return
+	if night_elapsed < _proc_next_warning_at:
+		return
+	# Build the candidate list: barrier hotspots that are healthy,
+	# not already in warning/assault/breach, and off cooldown. We allow
+	# any health level -- the round-2 pacing fix is specifically to
+	# keep the player active from the very first tick of a fresh night,
+	# so a fresh full-health door is a valid procedural target. The
+	# 25s per-hotspot cooldown handles the "don't spam the same door"
+	# concern.
+	var candidates: Array = []
+	for id in hotspots:
+		var h: Dictionary = hotspots[id]
+		if str(h.get("kind", "")) != "barrier":
+			continue
+		if h.get("assault", false) or h.get("warning", false):
+			continue
+		if h.get("breach_timer", -1.0) >= 0.0:
+			continue
+		if float(h.get("proc_cooldown", 0.0)) > 0.0:
+			continue
+		candidates.append(id)
+	if candidates.is_empty():
+		# No eligible hotspot right now -- try again in 4s.
+		_proc_next_warning_at = night_elapsed + 4.0
+		return
+	# Pick a random candidate and trigger a warning on it.
+	var pick_id: String = candidates[randi() % candidates.size()]
+	var pick: Dictionary = hotspots[pick_id]
+	pick["warning"] = true
+	pick["proc_cooldown"] = PROC_HOTSPOT_COOLDOWN
+	_log("远处传来声响——%s" % _hotspot_label(pick_id))
+	Fx.telegraph_schedule(
+		fx_telegraphs,
+		pick_id,
+		_dx_telegraph_lead(),
+		"assault"
+	)
+	# Schedule the next warning 6-10s out, jittered so the cadence
+	# doesn't feel mechanical. Slightly tighter cadence as the night
+	# wears on so the late-game pressure keeps ramping.
+	var ramp: float = clamp(night_elapsed / max(1.0, night_duration), 0.0, 1.0)
+	var min_gap: float = PROC_WARNING_INTERVAL_MIN - 1.5 * ramp
+	var max_gap: float = PROC_WARNING_INTERVAL_MAX - 2.0 * ramp
+	_proc_next_warning_at = night_elapsed + min_gap + randf() * (max_gap - min_gap)
 
 
 func _trigger_event(ev: Dictionary) -> void:
@@ -3061,9 +3174,11 @@ func _draw_player() -> void:
 	#     RGB (255,255,255 white) / (30,30,30 dark-gray) / (82,82,82
 	#     mid-gray) respectively, so layering produced a colored halo
 	#     around the player. polish spec §4.5.
-	#   - Repair animation is now procedural: position bob + rotation
-	#     tilt driven by the same PlayerRepairFx REPAIR_CYCLE_SEC rhythm
-	#     so the swing pacing stays consistent.
+	#   - Player silhouette is NEVER tilted or bobbed during repair -- the
+	#     swinging reads on a separate procedural hammer sprite next to
+	#     the player (hammer_sprite). Player itself stays locked to
+	#     player_pos with rotation=0, so idle / walking / repair share
+	#     the exact same silhouette.
 	var frames: Array = walk_frames.get(player_facing, [])
 	var tex: Texture2D = null
 	if not frames.is_empty():
@@ -3077,25 +3192,54 @@ func _draw_player() -> void:
 		player_token.scale = Vector2(1.0, 1.0)
 		player_token.flip_h = false
 		player_token.flip_v = false
+		player_token.position = player_pos
+		player_token.rotation = 0.0
 		player_token.modulate.a = 1.0
-		if player_repair_active:
-			# Procedural bob + tilt. Reuses PlayerRepairFx curves so the
-			# swing rhythm stays tied to REPAIR_CYCLE_SEC (0.36s = ~3
-			# swings per repair bar).
-			var bob: Vector2 = PlayerRepairFx.repair_bob_for(player_repair_timer)
-			player_token.position = player_pos + bob
-			var phase: float = fmod(player_repair_timer, PlayerRepairFx.REPAIR_CYCLE_SEC) / PlayerRepairFx.REPAIR_CYCLE_SEC
-			player_token.rotation = sin(phase * TAU) * 0.12
-		else:
-			player_token.position = player_pos
-			player_token.rotation = 0.0
-			# Reset timer so next repair starts cleanly from FRAME_START.
-			player_repair_timer = 0.0
 	else:
 		# Fallback: hide token (no colored circle in v0.5)
 		player_token.modulate.a = 0.0
 		player_token.position = player_pos
 		player_token.rotation = 0.0
+
+	# Drive the procedural hammer sprite. Sits at the player's hand
+	# offset, rotates ±0.5 rad on PlayerRepairFx REPAIR_CYCLE_SEC
+	# (~0.36s = ~3 swings per repair bar). Hidden when not repairing so
+	# the player isn't dragging a hammer around during walk / idle.
+	if hammer_sprite != null:
+		if player_repair_active:
+			hammer_sprite.visible = true
+			# Hand offset relative to the player token. Player sprite
+			# is 128x160; hand sits at top-right so the hammer is
+			# clearly visible against the player silhouette.
+			hammer_sprite.position = player_pos + Vector2(22.0, -54.0)
+			var phase: float = fmod(player_repair_timer, PlayerRepairFx.REPAIR_CYCLE_SEC) / PlayerRepairFx.REPAIR_CYCLE_SEC
+			# Two-segment swing: phase 0.0..0.45 -> swing DOWN (hammer
+			# arcs from -PI/3 back to -PI/6+1.4, max forward thrust near
+			# phase=0.5); phase 0.45..1.0 -> swing BACK (returns to
+			# -PI/3 ready position). The swing amplitude is large (1.4
+			# rad = ~80deg) so the hammer motion reads as a clear,
+			# energetic hammer-strike even at 1280x720. round-2 visual
+			# fix per user feedback: "哪怕边上加上锤子挥动的动画呢".
+			var swing: float
+			if phase < 0.45:
+				# Forward swing: -PI/3 (60deg up) -> -PI/6 + 1.4 (over-arm thrust)
+				swing = -PI / 3.0 + (phase / 0.45) * (PI / 6.0 + 1.4)
+			else:
+				# Recovery swing: back to -PI/3 over the remaining 0.55 phase
+				var recover_t: float = (phase - 0.45) / 0.55
+				swing = (-PI / 6.0 + 1.4) - recover_t * (PI / 3.0 + PI / 6.0 + 1.4)
+			hammer_sprite.rotation = swing
+			# Force a redraw -- Node2D's _draw caches its output across
+			# frames if no top-level transform component changed (we only
+			# tweak rotation, which on some Godot builds is treated as a
+			# no-op for the redraw queue). queue_redraw() guarantees the
+			# next render pass picks up the new rotation.
+			hammer_sprite.queue_redraw()
+		else:
+			hammer_sprite.visible = false
+			hammer_sprite.rotation = 0.0
+			# Reset timer so next repair starts cleanly from FRAME_START.
+			player_repair_timer = 0.0
 
 	# Drop the broken repair overlay (asset audit: PNGs not fully
 	# transparent -- alpha=0 pixels carry RGB 255/30/82 for start/mid/end).
