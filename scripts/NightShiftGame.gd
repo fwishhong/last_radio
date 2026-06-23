@@ -3050,88 +3050,60 @@ func _update_visual_feedback() -> void:
 
 
 func _draw_player() -> void:
-	player_token.position = player_pos
-	# player_facing and player_walk_frame are updated in _update_player_movement.
-	# Idle (no movement, not repairing) shows the actor_* idle art facing the
-	# current direction; moving cycles all 12 walk frames. When the repair
-	# overlay is active we hide the player sprite entirely — the repair PNGs
-	# are full repair scenes (player + door + plank + hammer), so layering
-	# them on top of the walk sprite produces a doubled body.
+	# Unified player visual across idle / walking / repair:
+	#   - All three states use the same walk-frame art (128x160 baseline)
+	#     so the player footprint never jumps. Previously idle switched
+	#     to actor_player_*.png (768x1024, content bbox 52%x91%) which
+	#     displayed at ~116 px tall vs walk's ~97 px tall -- a visible
+	#     size jump on every transition.
+	#   - The previous player_repair_*.png overlay is dropped entirely:
+	#     per-alpha-channel audit, alpha=0 pixels in start/mid/end carry
+	#     RGB (255,255,255 white) / (30,30,30 dark-gray) / (82,82,82
+	#     mid-gray) respectively, so layering produced a colored halo
+	#     around the player. polish spec §4.5.
+	#   - Repair animation is now procedural: position bob + rotation
+	#     tilt driven by the same PlayerRepairFx REPAIR_CYCLE_SEC rhythm
+	#     so the swing pacing stays consistent.
 	var frames: Array = walk_frames.get(player_facing, [])
-	if player_repair_active:
-		player_token.modulate.a = 0.0
-	elif not player_is_moving:
-		# Idle: prefer actor art; fall back to walk frame 0 if art is missing.
-		var actor_tex: Texture2D = _actor_for_facing(player_facing)
-		if actor_tex != null:
-			player_token.texture = actor_tex
-			# Actor PNGs are 768x1024 (vs walk sprite 128x160). Fit to the
-			# same PLAYER_TARGET_SIZE footprint so the player doesn't
-			# balloon when transitioning from walking to standing still.
-			var aw: float = float(actor_tex.get_width())
-			var ah: float = float(actor_tex.get_height())
-			if aw > 0.0 and ah > 0.0:
-				player_token.scale = Vector2(
-					PLAYER_TARGET_SIZE.x / aw,
-					PLAYER_TARGET_SIZE.y / ah
-				)
-			# Side actor is authored facing right; flip for left movement.
-			player_token.flip_h = (player_facing == "left")
-			player_token.flip_v = false
-			player_token.modulate.a = 1.0
-		elif not frames.is_empty() and frames[0] != null:
-			player_token.texture = frames[0]
-			player_token.scale = Vector2(1.0, 1.0)
-			player_token.flip_h = false
-			player_token.modulate.a = 1.0
+	var tex: Texture2D = null
+	if not frames.is_empty():
+		if player_is_moving:
+			var fi: int = clamp(player_walk_frame, 0, frames.size() - 1)
+			tex = frames[fi] if frames[fi] != null else frames[0]
 		else:
-			player_token.modulate.a = 0.0
-	elif not frames.is_empty() and frames[0] != null:
-		var fi: int = player_walk_frame if player_is_moving else 0
-		fi = clamp(fi, 0, frames.size() - 1)
-		if frames[fi] != null:
-			player_token.texture = frames[fi]
-		else:
-			player_token.texture = frames[0]
+			tex = frames[0]
+	if tex != null:
+		player_token.texture = tex
 		player_token.scale = Vector2(1.0, 1.0)
 		player_token.flip_h = false
+		player_token.flip_v = false
 		player_token.modulate.a = 1.0
+		if player_repair_active:
+			# Procedural bob + tilt. Reuses PlayerRepairFx curves so the
+			# swing rhythm stays tied to REPAIR_CYCLE_SEC (0.36s = ~3
+			# swings per repair bar).
+			var bob: Vector2 = PlayerRepairFx.repair_bob_for(player_repair_timer)
+			player_token.position = player_pos + bob
+			var phase: float = fmod(player_repair_timer, PlayerRepairFx.REPAIR_CYCLE_SEC) / PlayerRepairFx.REPAIR_CYCLE_SEC
+			player_token.rotation = sin(phase * TAU) * 0.12
+		else:
+			player_token.position = player_pos
+			player_token.rotation = 0.0
+			# Reset timer so next repair starts cleanly from FRAME_START.
+			player_repair_timer = 0.0
 	else:
 		# Fallback: hide token (no colored circle in v0.5)
 		player_token.modulate.a = 0.0
+		player_token.position = player_pos
+		player_token.rotation = 0.0
 
-	# Repair-action overlay: visible only while player_repair_active is set
-	# (by _update_hotspots when a barrier repair tick is firing). Hidden
-	# otherwise so the walk sprite is the default.
+	# Drop the broken repair overlay (asset audit: PNGs not fully
+	# transparent -- alpha=0 pixels carry RGB 255/30/82 for start/mid/end).
+	# The token stays in the tree so existing references don't null out,
+	# but it's permanently invisible so the halo can't appear.
 	if player_repair_token != null:
-		if player_repair_active:
-			var fi2: int = PlayerRepairFx.repair_frame_for(player_repair_timer)
-			var tex: Texture2D = player_repair_textures.get(fi2, null)
-			if tex != null:
-				player_repair_token.texture = tex
-				# Repair frames are authored larger than the player walk
-				# frames (e.g. 896x1200 vs 128x160), so scale the Sprite2D
-				# down to PLAYER_TARGET_SIZE first, then layer the
-				# cosmetic wobble from PlayerRepairFx on top. Without this
-				# fit-to-size step the texture covers most of the screen.
-				var tw: float = float(tex.get_width())
-				var th: float = float(tex.get_height())
-				if tw > 0.0 and th > 0.0:
-					var fit: Vector2 = Vector2(
-						PLAYER_TARGET_SIZE.x / tw,
-						PLAYER_TARGET_SIZE.y / th
-					)
-					var wobble: Vector2 = PlayerRepairFx.repair_scale_for(player_repair_timer)
-					player_repair_token.scale = fit * wobble
-			var bob: Vector2 = PlayerRepairFx.repair_bob_for(player_repair_timer)
-			player_repair_token.position = player_pos + bob
-			player_repair_token.modulate.a = 1.0
-			player_repair_token.visible = true
-		else:
-			player_repair_token.visible = false
-			player_repair_token.modulate.a = 0.0
-			# Reset timer so next repair starts cleanly from FRAME_START.
-			player_repair_timer = 0.0
+		player_repair_token.visible = false
+		player_repair_token.modulate.a = 0.0
 
 
 # ============================================================================
