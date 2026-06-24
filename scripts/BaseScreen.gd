@@ -1372,13 +1372,8 @@ func _refresh_members() -> void:
 		row.add_theme_constant_override("separation", 8)
 		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		member_box.add_child(row)
-		var portrait := TextureRect.new()
-		portrait.custom_minimum_size = Vector2(34, 34)
-		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		var texture_path := str(member.get("portrait", ""))
-		portrait.texture = _load_texture(texture_path)
-		row.add_child(portrait)
+		var glyph := _resolve_member_glyph(member)
+		row.add_child(_build_glyph_badge(glyph["letter"], glyph["color"], 34))
 		var text := Label.new()
 		if _story_day1_mode():
 			text.text = "%s / %s\n%s" % [
@@ -4202,3 +4197,65 @@ func _load_texture(path: String) -> Texture2D:
 	if err != OK:
 		return null
 	return ImageTexture.create_from_image(image)
+
+
+# Map a member dict to a UI-safe "name initial + role color" glyph spec.
+# Replaces the old portrait-based member chip. The role keyword match is
+# case-insensitive substring; the letter is the uppercase first char of
+# the member's name. If the name is empty, we fall back to "?" so the
+# badge still renders something rather than a blank box.
+func _resolve_member_glyph(member: Dictionary) -> Dictionary:
+	var name_text: String = str(member.get("name", ""))
+	var letter := "?"
+	if name_text.length() > 0:
+		letter = name_text.substr(0, 1).to_upper()
+	var color := _role_color(str(member.get("role", "")))
+	return {"letter": letter, "color": color}
+
+
+# Keyword -> color map for the role chip. Substring match, lowercased.
+# Order matters: more specific keywords (e.g. "mechanic" / "pathfinder")
+# are checked before the generic "radio" so a "Pathfinder Mechanic"
+# role doesn't accidentally match the radio yellow.
+func _role_color(role: String) -> Color:
+	var haystack := role.to_lower()
+	if haystack.find("radio") >= 0:
+		return Color(1.0, 0.84, 0.45)
+	if haystack.find("medic") >= 0 or haystack.find("medical") >= 0:
+		return Color(0.85, 0.40, 0.40)
+	if haystack.find("quartermaster") >= 0 or haystack.find("trade") >= 0 or haystack.find("scavenger") >= 0:
+		return Color(0.45, 0.55, 0.70)
+	if haystack.find("mechanic") >= 0 or haystack.find("pathfinder") >= 0 or haystack.find("repair") >= 0:
+		return Color(0.40, 0.70, 0.55)
+	return Color(0.55, 0.55, 0.55)
+
+
+# Build the visual badge (colored square with a centered letter) used
+# wherever a character is shown in the UI. Replaces portrait
+# TextureRects at every member-row and dispatch-card location.
+func _build_glyph_badge(letter: String, color: Color, size: int) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(size, size)
+	panel.size = Vector2(size, size)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(color.r, color.g, color.b, 0.85)
+	style.border_color = Color(color.r * 0.6, color.g * 0.6, color.b * 0.6, 0.95)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_left = 4
+	style.corner_radius_bottom_right = 4
+	panel.add_theme_stylebox_override("panel", style)
+	var label := Label.new()
+	label.text = letter
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	label.add_theme_font_size_override("font_size", max(14, int(size * 0.5)))
+	label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+	panel.add_child(label)
+	return panel

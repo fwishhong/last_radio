@@ -123,3 +123,19 @@
 | M10 商店素材 | ✅ 完成(描述 / capsule / 9 张截图 / trailer 脚本) |
 
 ## 立即开始:可玩性 / 视觉 / 特效 深化(本轮开发)
+
+> **本轮的 ssot 是 [`docs/design/last_radio_v2_polish_spec.md`](design/last_radio_v2_polish_spec.md)**。
+> 任何跑偏的讨论先回到该 spec 加条目，再动代码。本节是该 spec 在路线图层的索引。
+
+| M | 标题 | 预计 | 状态 | spec 链接 |
+|---|---|---|---|---|
+| ① (M10.5) | day-card 顺序错位修复 | 0.5d | ✅ `c6e44d6` | polish spec §0 |
+| ② (Round 2) | player 立绘 + repair overlay 修复 + dawn-fade reset + procedural pacing (night 2-10 6-10s cadence) | 1d | ✅ `faef1a4` + `66064a5` | polish spec §4.5 |
+| ③ (Round 2.1) | hammer swing thrust 1.4→1.8 rad + handle 暖棕调 + night 5+ 节奏 4-7s | 0.5d | ✅ (新 commit) | polish spec §4.5 |
+| M11 | NPC AI 接进主循环 + 软锁定 + zombie 视觉强化 | 2d | 🔜 | polish spec §4 / §5 |
+| M12 | NPC sprite + 顶部状态条 | 1d | 🔜 | polish spec §4.3 / §4.4 / §5 |
+| M13 | Cover / Tutorial Step 4 / Night Report 日志化 | 2d | 🔜 | polish spec §6 |
+| M14 | 25 张 day card body 独白化 (zh 先) | 1d | 🔜 | polish spec §6.3 |
+| M15 | 章节延展：角色来去 + Victor 失联 | 2d | 🔜 | polish spec §3 / §6.4 |
+
+**预计总工时**：8 天。详见 polish spec §9。

@@ -15,6 +15,9 @@ extends Node
 #
 # For now: every method either logs (debug) or no-ops. The interface stays
 # the same, so swapping is a one-file change.
+#
+# Chapter 1 ships with 8 reachable achievements. NG+ and Hard-Mode clears
+# are intentionally out of scope until those modes land.
 
 const ACHIEVEMENT_IDS := {
 	"first_night": "ACH_FIRST_NIGHT",
@@ -25,8 +28,6 @@ const ACHIEVEMENT_IDS := {
 	"no_breach": "ACH_FLAWLESS",
 	"first_contact": "ACH_FIRST_CONTACT",
 	"reach_victor": "ACH_VICTOR",
-	"hard_clear": "ACH_HARD_CLEAR",
-	"ng_plus_one": "ACH_NG_PLUS_1",
 }
 
 var _enabled: bool = false
@@ -80,16 +81,24 @@ func get_unlocked_achievements() -> Array:
 # ---------- cloud save (skeleton) ----------
 
 func cloud_write(filename: String, data: PackedByteArray) -> bool:
+	if filename.is_empty():
+		push_warning("Steamworks.cloud_write: empty filename")
+		return false
 	if _enabled:
 		# Real call: Steam.fileWrite(filename, data)
 		pass
+	print("[Steam] cloud_write stub: %s (%d bytes)" % [filename, data.size()])
 	return true  # always succeed for now
 
 
 func cloud_read(filename: String) -> PackedByteArray:
+	if filename.is_empty():
+		push_warning("Steamworks.cloud_read: empty filename")
+		return PackedByteArray()
 	if _enabled:
 		# Real call: Steam.fileRead(filename)
 		pass
+	print("[Steam] cloud_read stub: %s" % filename)
 	return PackedByteArray()
 
 

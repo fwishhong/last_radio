@@ -1,0 +1,1 @@
+{"agent": "general", "prompt": "Test spawn with full JSON but minimal prompt. Includes a real em dash — and backticks `code` and apostrophes 'like this' to match the failing pattern. Also includes newlines\\nand\\nspecial characters. Verify it works."}

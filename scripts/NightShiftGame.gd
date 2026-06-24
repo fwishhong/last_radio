@@ -1,4 +1,4 @@
-extends Node2D
+﻿extends Node2D
 # Last Radio - Night Shift Defense (v0.5 rewrite)
 # Data-driven single-script state machine. Driven by:
 #   - data/night_shift/{resources, day_cards, chapter_01_nights, signals}.json
@@ -11,10 +11,13 @@ const I18n := preload("res://scripts/I18n.gd")
 const Settings := preload("res://scripts/Settings.gd")
 const Fx := preload("res://scripts/NightShiftFx.gd")
 const FxLayer := preload("res://scripts/FxLayerNode.gd")
+const WorldFx := preload("res://scripts/WorldLayerFx.gd")
+const PlayerRepairFx := preload("res://scripts/PlayerRepairFx.gd")
 
-# Effect tuning knobs. Lead time is how many seconds before an assault
-# actually hits the hotspot that the warning telegraph appears. Particles
-# per impulse control how dense the bursts look at default intensity.
+# Effect tuning knobs. The two "lead time" / "grace" knobs are defaults —
+# runtime values come from difficulty_modifiers so casual/hard/custom
+# players see different telegraph + breach timings. Particles per impulse
+# control how dense the bursts look at default intensity.
 const FX_TELEGRAPH_LEAD_TIME := 2.0
 const FX_PARTICLE_LIMIT := 400  # hard cap so an assault storm can't tank FPS
 
@@ -27,8 +30,18 @@ const PLAY_RECT := Rect2(Vector2(64, 80), Vector2(1152, 560))
 const PLAYER_SPEED := 220.0
 const HOTSPOT_REACH := 70.0
 const REPAIR_RATE := 14.0  # value restored per second when standing on hotspot
-const BREACH_GRACE := 1.5  # seconds after value hits 0 before fail
+const BREACH_GRACE := 1.5  # default seconds after value hits 0 before fail; runtime uses difficulty_modifiers
 const PLAYER_SIZE := 18.0
+
+# Effective runtime values that resolve the difficulty modifiers against
+# the constants above. Code that used to read BREACH_GRACE / FX_TELEGRAPH_LEAD_TIME
+# directly should call these helpers so difficulty actually does something.
+func _dx_breach_grace() -> float:
+	return float(difficulty_modifiers.get("breach_grace", BREACH_GRACE))
+
+
+func _dx_telegraph_lead() -> float:
+	return float(difficulty_modifiers.get("telegraph", FX_TELEGRAPH_LEAD_TIME))
 
 # Hard-coded map of hotspot id -> screen position (matches chapter_01_nights.json IDs).
 # Coordinates reference stadium_room_topdown.png 1280x720 layout:
@@ -51,6 +64,12 @@ const HOTSPOT_POSITIONS := {
 	"medbay": Vector2(200, 520),
 	"storage": Vector2(1080, 520)
 }
+
+# Display footprint for hotspot illustrations. The source PNGs are
+# 256x256 with most of the artwork centered; displaying at 120x120 on
+# a 1280x720 screen keeps them readable without overwhelming the room.
+const HOTSPOT_ART_SIZE := Vector2(120, 120)
+const HOTSPOT_BTN_SIZE := Vector2(120, 138)  # art + 18 for the integrity bar
 
 const HOTSPOT_KIND := {
 	"front_door": "barrier",
@@ -113,6 +132,22 @@ var player_walk_frame: int = 0  # current frame in walk cycle (0..11)
 var player_walk_timer: float = 0.0  # accumulator for frame advance
 const PLAYER_WALK_FPS: float = 10.0  # 10 frames/sec -> 1.2s per 12-frame cycle
 const PLAYER_FRAMES_PER_DIR: int = 12
+# Idle actor art (v0.5 regression recovery). Three source PNGs at 768x1024:
+# front (facing camera, "down"), back (facing away, "up"), side (facing right;
+# mirrored for left via flip_h). Shown when player is not moving and not
+# repairing; walk sprites take over while moving.
+var actor_textures: Dictionary = {"front": null, "back": null, "side": null}
+# On-screen target size for the player + repair-action overlay. The
+# player_walk/ frames are authored at 128x160 and rendered at scale 1.0;
+# the repair-action PNGs are authored much larger (e.g. 896x1200) so the
+# Sprite2D needs to be scaled DOWN to fit the same footprint.
+const PLAYER_TARGET_SIZE := Vector2(128, 160)
+# Repair-action animation state (hammer swing). Visible only while
+# player is actively repairing a barrier hotspot.
+var player_repair_token: Sprite2D
+var player_repair_textures: Dictionary = {}  # {frame_id: Texture2D}
+var player_repair_active: bool = false  # true while repair ticks are firing
+var player_repair_timer: float = 0.0  # accumulator for frame cycle (sec)
 
 # Campaign state
 var resources: Dictionary = {}  # {planks, parts, battery, medicine, exposure, trust}
@@ -128,6 +163,10 @@ var unlocked_hotspots: Array = []
 var radio_contact_goal: int = 1
 var radio_window_left: float = 0.0
 var enemy_spawn_cooldown: float = 0.0
+# NPC runtime state. Keyed by npc_id ("nora", "elias"). Empty until ally joins.
+# Each entry: {pos, target, commit_timer, walk_timer, eval_timer, speed}.
+# See polish spec §4.5.
+var npc_state: Dictionary = {}
 
 # Event system (loaded from chapter_01_nights.json fixed_events)
 var event_queue: Array = []  # [{id, time, type, target, pressure}]
@@ -135,6 +174,23 @@ var events_done: Dictionary = {}
 
 # Per-night stats (for the failure/success report screen)
 var night_stats: Dictionary = {}  # {radio_contacts, enemies_killed, hotfixes, breaches, breaches_first_id}
+
+# Cumulative breach count across the run (for the no_breach achievement).
+# Each night bumps this in _end_night from night_stats["breaches"]; the
+# no_breach achievement fires on chapter clear when this is still 0.
+var total_breaches: int = 0
+
+# Achievement single-fire flags. Each guard ensures the trigger site only
+# unlocks once per run; Steamworks.unlock_achievement also guards
+# internally but the local flag keeps the trigger clean.
+var _ach_first_contact: bool = false
+var _ach_reach_victor: bool = false
+var _ach_recruit_nora: bool = false
+var _ach_recruit_elias: bool = false
+var _ach_all_three: bool = false
+var _ach_first_night: bool = false
+var _ach_clear_all: bool = false
+var _ach_no_breach: bool = false
 
 var rng := RandomNumberGenerator.new()
 
@@ -151,9 +207,20 @@ var prompt_label: Label
 var hotspot_layer: Node2D
 var enemy_layer: Node2D
 var player_token: Sprite2D
+# Procedural hammer sprite that sits next to the player_token during
+# repair ticks. Sits ABOVE player_token (z=1) and BELOW the FX/critical
+# overlay (z=4/5). Driven by _draw_player with the same
+# PlayerRepairFx REPAIR_CYCLE_SEC phase the FX layer uses. Typed as
+# Node2D rather than HammerSprite to avoid a hard class_name cache
+# dependency on a freshly-added script.
+var hammer_sprite: Node2D
 var card_layer: Control
 var music_player: AudioStreamPlayer
 var sfx_player: AudioStreamPlayer
+# When true, _process watches music_player and swaps in the looping
+# `music_report` bed once the one-shot success/failure sting finishes.
+# Set by _end_night and _show_night_report; cleared once the swap happens.
+var _pending_report_music: bool = false
 var flash_rect: ColorRect  # blackout / danger pulse
 var radio_panel: Panel  # contact progress panel (only visible at the radio)
 var radio_progress_bar: ColorRect
@@ -166,8 +233,11 @@ var last_report_body: String = ""
 # Currently-active save slot. Set when player picks a slot on the cover
 # screen. All save/load operations go through this var.
 var current_slot: int = 0
-# Difficulty for the current run. 0 = normal, 1 = hard.
-var current_difficulty: int = 0
+# Difficulty for the current run. The preset name drives UI labels; the
+# modifier dict drives gameplay (enemy count, drain rate, etc). Both are
+# persisted to the slot via NightShiftSave.
+var current_difficulty: String = "standard"
+var difficulty_modifiers: Dictionary = {}
 # Number of completed chapter clears (used for New Game+ carry-over).
 var ng_plus_count: int = 0
 var radio_progress_label: Label
@@ -223,12 +293,66 @@ var fx_static_target: float = 0.0  # target alpha (0 or 0.55, lerp toward this)
 var fx_dawn_alpha: float = 0.0
 var fx_dawn_target: float = 0.0
 const DAWN_FADE_DURATION := 1.5
+# Procedural background warning scheduler -- ensures night 2+ has a
+# constant drip of incoming threats so the player is never idle for
+# long stretches. _show_night() resets _proc_next_warning_at to -1.0
+# which forces re-initialization on the first _update_events tick.
+# Per-hotspot cooldown lives on hotspot["proc_cooldown"] so the
+# scheduler never piles multiple warnings on the same door/window.
+# round-2 pacing fix: night 2-10 used to have only 2-3 fixed events
+# per 120-180s night, leaving the player with 40-90s of dead air.
+var _proc_next_warning_at: float = -1.0
+# Default (night 1-4) base cadence for procedural background warnings.
+# _proc_tick_background_warnings switches to a tighter 4-7s base from
+# night 5 onward so the late-game pressure keeps ramping; the per-night
+# ramp on top of the base still subtracts 1.5s/2.0s from min/max as
+# night_elapsed approaches night_duration.
+const PROC_WARNING_INTERVAL_MIN := 6.0
+const PROC_WARNING_INTERVAL_MAX := 10.0
+# Late-night (night 5+) tighter base cadence. Picked to keep the
+# player within one teleport of needing to run for the entire late
+# game; night-end ramp pushes the cadence down to ~2.5-5s.
+const PROC_WARNING_LATE_MIN := 4.0
+const PROC_WARNING_LATE_MAX := 7.0
+# First night (0-based) where the late-game cadence kicks in.
+const PROC_WARNING_LATE_NIGHT := 4
+const PROC_HOTSPOT_COOLDOWN := 25.0
 
 # Footstep dust: small puffs kicked up at the player's feet every
 # FOOTSTEP_INTERVAL seconds while moving. Cheap — each puff is 2-3 short-
 # life particles with downward gravity.
 var fx_footstep_accum: float = 0.0
+# Counts consecutive footstep puffs — used to alternate L/R phase so a
+# future cadence change can map even/odd steps to different SFX variants.
+var fx_footstep_phase: int = 0
 const FOOTSTEP_INTERVAL := 0.28
+
+# ============================================================================
+# WORLD LAYER (parallax + outside-zombie sprites)
+# ============================================================================
+# Two parallax atmospheric plates sit BEHIND the room; independent zombie
+# sprites sit IN FRONT of the room (so they're visible at the door/window
+# hotspots) but BEHIND the FX layer (so telegraph rings + particles stay
+# readable). The sprites replace the previous red-circle "threat" overlays
+# with something that feels like a 2D side-scroller — you can actually see
+# the zombies standing outside.
+var world_layer_far: Node2D        # z=-10
+var world_layer_mid: Node2D        # z=-5
+var world_far_sprite: Sprite2D
+var world_mid_sprite: Sprite2D
+var world_parallax_phase: float = 0.0
+var zombie_outside_layer: Node2D   # z=3
+# Per-hotspot zombie sprite + sway accumulator. Key is hotspot id; only
+# barrier hotspots get a sprite (doors + windows). Value shape:
+#   {sprite: Sprite2D, sway_acc: Dictionary, last_phase: int}
+var zombie_outside_sprites: Dictionary = {}
+# Cached textures — loaded once in _ready, reused across all sprites.
+var zombie_approach_door_tex: Texture2D
+var zombie_breach_door_tex: Texture2D
+var zombie_approach_window_tex: Texture2D
+var zombie_breach_window_tex: Texture2D
+var world_far_tex: Texture2D
+var world_mid_tex: Texture2D
 
 # ============================================================================
 # LIFECYCLE
@@ -287,6 +411,42 @@ func _load_assets() -> void:
 	# Hotspot state art — try loading, fall back to null (rendered as colored circles)
 	_load_hotspot_arts()
 
+	# World-layer parallax + outside-zombie textures. Loaded once, reused
+	# across all sprites. Missing files just become null and the layer
+	# quietly no-ops (so a half-imported build still runs).
+	world_far_tex = _safe_load_texture(ASSET_PATH + "outside_world_far.png")
+	world_mid_tex = _safe_load_texture(ASSET_PATH + "outside_world_mid.png")
+	zombie_approach_door_tex = _safe_load_texture(
+		ASSET_PATH + "zombie_outside_door_approach.png"
+	)
+	zombie_breach_door_tex = _safe_load_texture(
+		ASSET_PATH + "zombie_outside_door_breach.png"
+	)
+	zombie_approach_window_tex = _safe_load_texture(
+		ASSET_PATH + "zombie_outside_window_approach.png"
+	)
+	zombie_breach_window_tex = _safe_load_texture(
+		ASSET_PATH + "zombie_outside_window_breach.png"
+	)
+	# Player repair-action frames (3-frame hammer cycle).
+	player_repair_textures[PlayerRepairFx.REPAIR_FRAME_START] = _safe_load_texture(
+		ASSET_PATH + "player_repair_start.png"
+	)
+	player_repair_textures[PlayerRepairFx.REPAIR_FRAME_MID] = _safe_load_texture(
+		ASSET_PATH + "player_repair_mid.png"
+	)
+	player_repair_textures[PlayerRepairFx.REPAIR_FRAME_END] = _safe_load_texture(
+		ASSET_PATH + "player_repair_end.png"
+	)
+
+
+func _safe_load_texture(path: String) -> Texture2D:
+	if not FileAccess.file_exists(path):
+		push_warning("WorldLayerFx texture missing: %s" % path)
+		return null
+	var res: Resource = load(path)
+	return res as Texture2D
+
 
 func _load_hotspot_arts() -> void:
 	var art_root := ASSET_PATH
@@ -311,7 +471,10 @@ func _load_hotspot_arts() -> void:
 
 
 func _load_audio() -> void:
-	var tracks := ["cover", "day", "night_early", "night_final", "final"]
+	var tracks := [
+		"cover", "day", "night_early", "night_final", "final",
+		"success", "failure", "report",
+	]
 	for t in tracks:
 		var p: String = AUDIO_PATH + "music_" + t + ".mp3"
 		if ResourceLoader.exists(p):
@@ -319,6 +482,8 @@ func _load_audio() -> void:
 			if s:
 				s = s.duplicate()
 				if "loop" in s:
+					# Music tracks default to looping; one-shot stings (success/
+					# failure) override this per-call via _play_music(track, false).
 					s.set("loop", true)
 				audio_streams[t] = s
 	# ambient
@@ -335,12 +500,17 @@ func _load_audio() -> void:
 	sfx_streams = NightShiftSfx.build_all()
 
 
-func _play_music(track: String) -> void:
+func _play_music(track: String, looped: bool = true) -> void:
 	if music_player == null:
 		return
 	music_player.stop()
 	if track in audio_streams and audio_streams[track]:
-		music_player.stream = audio_streams[track]
+		var s: AudioStream = audio_streams[track]
+		# Override loop flag per-call so success/failure stings can play
+		# non-looped while background tracks (cover/day/night_*) keep looping.
+		if "loop" in s:
+			s.set("loop", looped)
+		music_player.stream = s
 		music_player.play()
 
 
@@ -378,6 +548,23 @@ func _build_walk_frames() -> void:
 			var p: String = ASSET_PATH + "player_walk/" + dir_name + "_" + str(i).pad_zeros(2) + ".png"
 			if ResourceLoader.exists(p):
 				walk_frames[dir_name].append(load(p) as Texture2D)
+	# Idle actor art (3 views, 768x1024 each). Player shows these when not
+	# moving; walk sprite takes over during translation. side is authored
+	# facing right; _draw_player flips it horizontally when facing left.
+	for view_name in ["front", "back", "side"]:
+		var p2: String = ASSET_PATH + "actor_player_" + view_name + ".png"
+		if ResourceLoader.exists(p2):
+			actor_textures[view_name] = load(p2) as Texture2D
+
+
+# Pick the idle-actor texture for the player's current facing. down -> front,
+# up -> back, left/right -> side (mirrored at draw time).
+func _actor_for_facing(facing: String) -> Texture2D:
+	if facing == "up":
+		return actor_textures.get("back", null)
+	if facing == "left" or facing == "right":
+		return actor_textures.get("side", null)
+	return actor_textures.get("front", null)
 
 
 # ============================================================================
@@ -388,6 +575,30 @@ func _build_ui() -> void:
 	canvas = CanvasLayer.new()
 	canvas.layer = 0
 	add_child(canvas)
+
+	# World-layer parallax — drawn BEHIND the room (z_index < 0). The far
+	# plate is almost static; the mid plate drifts with parallax_offset().
+	world_layer_far = Node2D.new()
+	world_layer_far.z_index = -10
+	world_layer_far.name = "WorldLayerFar"
+	canvas.add_child(world_layer_far)
+	world_far_sprite = Sprite2D.new()
+	world_far_sprite.name = "FarBg"
+	world_far_sprite.texture = world_far_tex
+	world_far_sprite.centered = true
+	world_far_sprite.position = SCREEN_SIZE * 0.5
+	world_layer_far.add_child(world_far_sprite)
+
+	world_layer_mid = Node2D.new()
+	world_layer_mid.z_index = -5
+	world_layer_mid.name = "WorldLayerMid"
+	canvas.add_child(world_layer_mid)
+	world_mid_sprite = Sprite2D.new()
+	world_mid_sprite.name = "MidBg"
+	world_mid_sprite.texture = world_mid_tex
+	world_mid_sprite.centered = true
+	world_mid_sprite.position = SCREEN_SIZE * 0.5
+	world_layer_mid.add_child(world_mid_sprite)
 
 	bg = TextureRect.new()
 	bg.position = Vector2.ZERO
@@ -438,6 +649,15 @@ func _build_ui() -> void:
 	enemy_layer = Node2D.new()
 	canvas.add_child(enemy_layer)
 
+	# Zombie-outside layer — independent sprites standing outside barrier
+	# hotspots (door / window). Drawn IN FRONT of the room bg + hotspot
+	# dots (so you see them through the door/window) but BEHIND the FX
+	# layer (so telegraph rings + breach particles stay readable).
+	zombie_outside_layer = Node2D.new()
+	zombie_outside_layer.z_index = 3
+	zombie_outside_layer.name = "ZombieOutsideLayer"
+	canvas.add_child(zombie_outside_layer)
+
 	# Procedural FX layer — particles + telegraph rings. Sits above the
 	# enemy layer so breaches and sparks read on top of the enemy tokens.
 	fx_layer = FxLayer.new()
@@ -465,6 +685,30 @@ func _build_ui() -> void:
 	player_token.scale = Vector2(1.0, 1.0)
 	player_token.texture = walk_frames.get("down", [null])[0] if not walk_frames.get("down", []).is_empty() else null
 	canvas.add_child(player_token)
+
+	# Player repair-action sprite -- drawn ON TOP of player_token so the
+	# hammer reads above the walk sprite. Hidden by default; _draw_player
+	# toggles visible + texture while repair ticks are firing.
+	player_repair_token = Sprite2D.new()
+	player_repair_token.position = player_pos
+	player_repair_token.scale = Vector2(1.0, 1.0)
+	player_repair_token.visible = false
+	player_repair_token.z_index = 1  # above walk sprite
+	player_repair_token.texture = player_repair_textures.get(PlayerRepairFx.REPAIR_FRAME_START, null)
+	canvas.add_child(player_repair_token)
+
+	# Procedural hammer sprite -- the player_token itself stays perfectly
+	# still (no tilt / bob) during repair; this hammer rotates next to
+	# the player so the swing reads visually without warping the
+	# silhouette. Permanent visible=false; _draw_player toggles it on
+	# during repair ticks. polish spec §4.5 / round-2 visual fix.
+	const HammerSpriteScript := preload("res://scripts/HammerSprite.gd")
+	hammer_sprite = HammerSpriteScript.new()
+	hammer_sprite.name = "HammerSprite"
+	hammer_sprite.position = player_pos
+	hammer_sprite.visible = false
+	hammer_sprite.z_index = 1  # above walk sprite, same as old repair_token
+	canvas.add_child(hammer_sprite)
 
 	# Radio contact progress panel — only visible while the player is standing
 	# at the radio hotspot and the radio is active.
@@ -733,13 +977,16 @@ func _make_label(pos: Vector2, font_size: int, color: Color) -> Label:
 
 
 func _clear_card_layer() -> void:
-	# Use immediate `free` instead of `queue_free` so the new content
-	# built in the same call stack sees a clean card_layer. queue_free
-	# defers and was causing tests to count stale slot/difficulty panels
-	# in the day card assertions.
+	# Detach first, then queue_free. Doing `child.free()` directly is unsafe
+	# when this is called from a button's `pressed` signal handler (e.g. the
+	# Confirm button on the difficulty picker) — the button is locked while
+	# its signal is being emitted, and `free()` raises
+	#   "Attempted to free a locked object (calling or emitting)."
+	# Detach + queue_free defers the actual delete to the next idle frame,
+	# which sidesteps the lock and matches what tests already await on.
 	for child in card_layer.get_children():
 		card_layer.remove_child(child)
-		child.free()
+		child.queue_free()
 
 
 # ============================================================================
@@ -812,6 +1059,9 @@ func _show_slot_picker() -> void:
 	phase = "cover"
 	_clear_card_layer()
 	card_layer.visible = true
+	# Hotspots only belong on the night map; cover/slot/difficulty pickers
+	# would otherwise show stale button rings over the background.
+	hotspot_layer.visible = false
 	if art.get("cover"):
 		bg.texture = art["cover"]
 	_play_music("cover")
@@ -859,10 +1109,11 @@ func _build_slot_card(slot: int, pos: Vector2, sz: Vector2) -> void:
 		card.add_child(line1)
 
 		var diff_label: Label = Label.new()
-		if summary.difficulty == NightShiftSave.DIFFICULTY_HARD:
-			diff_label.text = I18n.t("slot_difficulty_hard")
+		var preset: String = str(summary.get("current_difficulty", "standard"))
+		if preset == "custom":
+			diff_label.text = I18n.t("slot_difficulty_custom")
 		else:
-			diff_label.text = I18n.t("slot_difficulty_normal")
+			diff_label.text = NightShiftSave.preset_label(preset)
 		diff_label.position = Vector2(20, 88)
 		diff_label.size = Vector2(sz.x - 40, 24)
 		diff_label.add_theme_constant_override("font_size", 14)
@@ -904,6 +1155,7 @@ func _build_slot_card(slot: int, pos: Vector2, sz: Vector2) -> void:
 
 
 func _on_slot_play_pressed(slot: int) -> void:
+	print("DEBUG _on_slot_play_pressed called")
 	current_slot = slot
 	var doc: Dictionary = NightShiftSave.read(slot)
 	if doc.is_empty():
@@ -928,9 +1180,12 @@ func _on_slot_erase_pressed(slot: int) -> void:
 
 
 func _show_difficulty_picker() -> void:
+	_dx_debug_probe_phase = true
 	phase = "cover"
 	_clear_card_layer()
 	card_layer.visible = true
+	# Difficulty picker overlays the cover background; hide hotspots.
+	hotspot_layer.visible = false
 
 	status_label.text = I18n.t("difficulty_pick_title")
 	prompt_label.text = ""
@@ -940,111 +1195,243 @@ func _show_difficulty_picker() -> void:
 	if ng_plus_count > 0:
 		var banner: Label = Label.new()
 		banner.text = I18n.t("ng_plus_banner")
-		banner.position = Vector2(SCREEN_SIZE.x * 0.5 - 200, 160)
+		banner.position = Vector2(SCREEN_SIZE.x * 0.5 - 200, 100)
 		banner.size = Vector2(400, 28)
 		banner.add_theme_constant_override("font_size", 16)
 		banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		banner.modulate = Color(1, 0.85, 0.5, 1)
 		card_layer.add_child(banner)
 
-	# Two big cards: Normal / Hard.
-	var card_w: float = 360.0
-	var card_h: float = 240.0
-	var gap: float = 60.0
-	var total_w: float = 2.0 * card_w + gap
-	var start_x: float = (SCREEN_SIZE.x - total_w) * 0.5
-	var y: float = 220.0
-	_build_difficulty_card(
-		NightShiftSave.DIFFICULTY_NORMAL,
-		I18n.t("difficulty_normal_label"),
-		I18n.t("difficulty_normal_desc"),
-		Vector2(start_x, y),
-		Vector2(card_w, card_h)
-	)
-	_build_difficulty_card(
-		NightShiftSave.DIFFICULTY_HARD,
-		I18n.t("difficulty_hard_label"),
-		I18n.t("difficulty_hard_desc"),
-		Vector2(start_x + card_w + gap, y),
-		Vector2(card_w, card_h)
-	)
+	# Seed the working modifiers from the current run if any, else standard.
+	if difficulty_modifiers.is_empty():
+		difficulty_modifiers = NightShiftSave.modifiers_for_preset(current_difficulty)
 
-	# Back to slot picker
+	# Panel background for the slider stack.
+	var panel := Panel.new()
+	panel.position = Vector2(SCREEN_SIZE.x * 0.5 - 380, 130)
+	panel.size = Vector2(760, 460)
+	card_layer.add_child(panel)
+
+	# Preset chip row at the top of the panel — clicking a chip snaps the
+	# sliders to that preset's values. The active chip is highlighted.
+	var chip_y: float = 144.0
+	var chip_w: float = 130.0
+	var chip_h: float = 36.0
+	var chip_gap: float = 14.0
+	var chip_count: int = NightShiftSave.DIFFICULTY_PRESETS.size()
+	var chip_total: float = float(chip_count) * chip_w + float(chip_count - 1) * chip_gap
+	var chip_x: float = SCREEN_SIZE.x * 0.5 - chip_total * 0.5
+	var preset_buttons := {}
+	for preset_name in NightShiftSave.DIFFICULTY_PRESETS:
+		var chip_btn := _make_button(
+			NightShiftSave.preset_label(preset_name),
+			Vector2(chip_x, chip_y),
+			Vector2(chip_w, chip_h),
+			_on_difficulty_preset_pressed.bind(preset_name)
+		)
+		chip_btn.set_meta("preset", preset_name)
+		preset_buttons[preset_name] = chip_btn
+		card_layer.add_child(chip_btn)
+		chip_x += chip_w + chip_gap
+	# "Custom" chip — always shown, active when sliders don't match any preset.
+	var custom_btn := _make_button(
+		NightShiftSave.preset_label("custom"),
+		Vector2(chip_x, chip_y),
+		Vector2(chip_w, chip_h),
+		_on_difficulty_custom_pressed
+	)
+	custom_btn.set_meta("preset", "custom")
+	preset_buttons["custom"] = custom_btn
+	card_layer.add_child(custom_btn)
+	_dx_highlight_active_preset(preset_buttons)
+
+	# Slider rows. One per modifier axis. Each row has: label (left), the
+	# slider, and a value readout (right). Live updates mark current_difficulty
+	# as "custom" so the highlight shifts.
+	var slider_x: float = SCREEN_SIZE.x * 0.5 - 360.0
+	var slider_w: float = 540.0
+	var value_w: float = 90.0
+	var label_w: float = 160.0
+	var slider_top: float = 200.0
+	var slider_gap: float = 50.0
+	var slider_rows := {}
+	for i in NightShiftSave.MODIFIER_KEYS.size():
+		var key: String = NightShiftSave.MODIFIER_KEYS[i]
+		var bounds: Dictionary = NightShiftSave.DIFFICULTY_BOUNDS[key]
+		var y_row: float = slider_top + float(i) * slider_gap
+		if _dx_debug_probe_phase:
+			print("DEBUG slider loop iter ", i, " key=", key)
+		# Label
+		var lab: Label = Label.new()
+		lab.text = I18n.t("difficulty_axis_%s" % key)
+		lab.position = Vector2(slider_x, y_row + 4)
+		lab.size = Vector2(label_w, 24)
+		lab.add_theme_constant_override("font_size", 16)
+		lab.add_theme_constant_override("outline_size", 2)
+		card_layer.add_child(lab)
+		# Slider
+		var sld := HSlider.new()
+		sld.min_value = float(bounds["min"])
+		sld.max_value = float(bounds["max"])
+		sld.step = float(bounds["step"])
+		sld.value = float(difficulty_modifiers.get(key, float(bounds["min"])))
+		sld.position = Vector2(slider_x + label_w, y_row + 4)
+		sld.size = Vector2(slider_w - label_w - value_w, 24)
+		sld.set_meta("modifier_key", key)
+		sld.value_changed.connect(_on_difficulty_slider_changed.bind(key))
+		card_layer.add_child(sld)
+		# Value readout
+		var val_lab: Label = Label.new()
+		val_lab.text = "%.2f" % sld.value
+		val_lab.position = Vector2(slider_x + slider_w - value_w + 8, y_row + 4)
+		val_lab.size = Vector2(value_w, 24)
+		val_lab.add_theme_constant_override("font_size", 16)
+		val_lab.add_theme_color_override("font_color", Color(1, 0.95, 0.7))
+		val_lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		val_lab.set_meta("value_label", true)
+		sld.set_meta("value_label", val_lab)
+		card_layer.add_child(val_lab)
+		slider_rows[key] = sld
+	if _dx_debug_probe_phase:
+		print("DEBUG slider loop done")
+	_dx_slider_row_handles = slider_rows
+	_dx_preset_chip_handles = preset_buttons
+
+	# Confirm + back buttons at the bottom.
+	var confirm_btn := _make_button(
+		I18n.t("btn_choose"),
+		Vector2(SCREEN_SIZE.x * 0.5 - 220, SCREEN_SIZE.y - 80),
+		Vector2(200, 50),
+		_on_difficulty_confirm
+	)
+	card_layer.add_child(confirm_btn)
 	var back_btn := _make_button(
 		I18n.t("btn_back"),
-		Vector2(SCREEN_SIZE.x * 0.5 - 100, SCREEN_SIZE.y - 80),
+		Vector2(SCREEN_SIZE.x * 0.5 + 20, SCREEN_SIZE.y - 80),
 		Vector2(200, 50),
 		_show_slot_picker
 	)
 	card_layer.add_child(back_btn)
+	print("DEBUG _show_difficulty_picker done, _show_day calls during picker=", _dx_debug_probe_count)
+	_dx_debug_probe_phase = false
 
 
-func _build_difficulty_card(diff: int, title: String, desc: String, pos: Vector2, sz: Vector2) -> void:
-	var card := Panel.new()
-	card.position = pos
-	card.size = sz
-	card_layer.add_child(card)
+# Handles the preset chip buttons. Snaps sliders to the preset's values.
+func _on_difficulty_preset_pressed(preset: String) -> void:
+	if _dx_debug_probe_phase:
+		print("DEBUG _on_difficulty_preset_pressed", preset)
+	difficulty_modifiers = NightShiftSave.modifiers_for_preset(preset)
+	current_difficulty = preset
+	_dx_apply_modifiers_to_sliders()
+	_dx_highlight_active_preset(_dx_preset_chip_handles)
 
-	var t: Label = Label.new()
-	t.text = title
-	t.position = Vector2(20, 16)
-	t.size = Vector2(sz.x - 40, 36)
-	t.add_theme_constant_override("font_size", 26)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	card.add_child(t)
 
-	var d: Label = Label.new()
-	d.text = desc
-	d.position = Vector2(20, 70)
-	d.size = Vector2(sz.x - 40, 80)
-	d.add_theme_constant_override("font_size", 14)
-	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	d.modulate = Color(0.8, 0.8, 0.85, 1)
-	card.add_child(d)
+func _on_difficulty_custom_pressed() -> void:
+	# Keep current sliders; just mark the selection as "custom" so the
+	# highlight + status text reflect that we're off-preset.
+	current_difficulty = "custom"
+	_dx_highlight_active_preset(_dx_preset_chip_handles)
 
-	var pick_btn := _make_button(
-		I18n.t("btn_choose"),
-		Vector2(20, sz.y - 60),
-		Vector2(sz.x - 40, 44),
-		_on_difficulty_chosen.bind(diff)
-	)
-	card.add_child(pick_btn)
+
+func _on_difficulty_slider_changed(value: float, key: String) -> void:
+	if _dx_debug_probe_phase:
+		print("DEBUG _on_difficulty_slider_changed", key, value)
+	# Update the modifier dict + the live readout label. If the resulting
+	# set no longer matches the active preset, demote to "custom".
+	difficulty_modifiers[key] = value
+	if _dx_slider_row_handles.has(key):
+		var sld: HSlider = _dx_slider_row_handles[key]
+		var vlab: Label = sld.get_meta("value_label") as Label
+		if vlab:
+			vlab.text = "%.2f" % value
+	var matched: String = NightShiftSave.matches_preset(difficulty_modifiers)
+	if matched != current_difficulty:
+		current_difficulty = matched
+		_dx_highlight_active_preset(_dx_preset_chip_handles)
 
 
 func _on_difficulty_chosen(diff: int) -> void:
-	current_difficulty = diff
-	# If this is a fresh slot, also clear it first so we start from zero
-	# regardless of any leftover state.
+	# Legacy entry point used by old tests. Translates the v3 integer into
+	# the matching v4 preset name + modifier dict, then proceeds as if the
+	# player picked that preset via the slider panel.
+	current_difficulty = "hard" if diff == NightShiftSave.DIFFICULTY_HARD else "standard"
+	difficulty_modifiers = NightShiftSave.modifiers_for_preset(current_difficulty)
+	_on_difficulty_confirm()
+
+
+func _on_difficulty_confirm() -> void:
+	# Final clamp + normalize before saving so any drift from slider snapping
+	# is cleaned up. Then write the run start doc into the slot.
+	print("DEBUG _on_difficulty_confirm called")
+	difficulty_modifiers = NightShiftSave.normalize_modifiers(difficulty_modifiers)
+	current_difficulty = NightShiftSave.matches_preset(difficulty_modifiers)
 	NightShiftSave.clear_slot(current_slot)
-	# Initialize the run.
 	night_index = 0
 	resources = data.initial_resource_values()
 	upgrades.clear()
 	allies = {"nora": false, "elias": false, "victor": true}
+	unlocked_hotspots.clear()
+	day_effects = NightShiftDayEffects.new()
 	radio_available = false
 	radio_completed = false
 	radio_missed = false
 	blackout = false
-	# Persist the difficulty + ng_plus_count + tutorial_done=false so the
-	# save reflects a clean new game.
+	radio_contact_goal = 1
+	radio_window_left = 0.0
+	radio_contacts_made = 0
+	# Apply difficulty-driven starting offsets (NG+ bonus is added later).
+	_apply_ng_plus_bonus()
+	# Persist immediately so a crash mid-night-1 still has the right state.
 	NightShiftSave.write({
 		"night_index": night_index,
 		"resources": resources,
 		"upgrades": upgrades,
 		"allies": allies,
-		"unlocked_hotspots": [],
-		"radio_available": false,
-		"radio_completed": false,
-		"radio_missed": false,
-		"blackout": false,
+		"unlocked_hotspots": unlocked_hotspots,
+		"radio_available": radio_available,
+		"radio_completed": radio_completed,
+		"radio_missed": radio_missed,
+		"blackout": blackout,
+		"radio_contact_goal": radio_contact_goal,
+		"radio_window_left": radio_window_left,
+		"radio_tuned_channel": radio_tuned_channel,
+		"radio_contacts_made": radio_contacts_made,
 		"tutorial_done": false,
-		"difficulty": current_difficulty,
+		"current_difficulty": current_difficulty,
+		"difficulty_modifiers": difficulty_modifiers,
 		"ng_plus_count": ng_plus_count,
 	}, current_slot)
-	# Apply NG+ bonus if applicable
-	_apply_ng_plus_bonus()
 	_show_day()
+
+
+# Slider + chip handles cached so _on_difficulty_slider_changed can update
+# them without traversing the card layer.
+var _dx_slider_row_handles: Dictionary = {}
+var _dx_preset_chip_handles: Dictionary = {}
+var _dx_debug_probe_phase: bool = false
+var _dx_debug_probe_count: int = 0
+
+
+func _dx_apply_modifiers_to_sliders() -> void:
+	for key in _dx_slider_row_handles:
+		var sld: HSlider = _dx_slider_row_handles[key]
+		sld.value = float(difficulty_modifiers.get(key, sld.value))
+		var vlab: Label = sld.get_meta("value_label") as Label
+		if vlab:
+			vlab.text = "%.2f" % sld.value
+
+
+func _dx_highlight_active_preset(chips: Dictionary) -> void:
+	# Pure visual: tint the active preset chip gold, dim the rest. Must NOT
+	# write saves or transition phases — that's _on_difficulty_confirm's job.
+	# (Earlier this function did all of that, which caused clicking "New Game"
+	# on a slot to skip past the picker entirely and jump straight to day.)
+	if _dx_debug_probe_phase:
+		print("DEBUG _dx_highlight_active_preset called")
+	for preset_name in chips:
+		var btn: Button = chips[preset_name]
+		var active: bool = preset_name == current_difficulty
+		btn.modulate = Color(1.0, 0.95, 0.7, 1.0) if active else Color(0.7, 0.7, 0.78, 1.0)
 
 
 func _apply_ng_plus_bonus() -> void:
@@ -1057,11 +1444,34 @@ func _apply_ng_plus_bonus() -> void:
 		if resources[k] is int or resources[k] is float:
 			resources[k] = int(resources[k]) + 1 * ng_plus_count
 	# Trust a little higher
-	allies["nora"] = true
+	if not bool(allies.get("nora", false)):
+		allies["nora"] = true
+		if not _ach_recruit_nora:
+			_ach_recruit_nora = true
+			_unlock_ach("recruit_nora")
+		if bool(allies.get("nora", false)) and bool(allies.get("elias", false)) and bool(allies.get("victor", false)):
+			if not _ach_all_three:
+				_ach_all_three = true
+				_unlock_ach("all_three_allies")
 	_log("New Game+ bonus: +%d to each starting resource, Nora starts available." % ng_plus_count)
 
 
 func _load_state_from_doc(doc: Dictionary) -> void:
+	# Sanity-check the save before loading. A valid game always starts with a
+	# non-empty resource dict (planks/parts/battery/...) — an empty one means
+	# the slot got partially written by an older buggy code path (e.g. the
+	# _dx_highlight_active_preset write-before-confirm bug). Wipe it and bail
+	# back to the slot picker so the player can start fresh instead of
+	# loading a zero-resource dead run.
+	var preview_resources: Dictionary = doc.get("resources", {}) as Dictionary
+	if preview_resources.is_empty():
+		var bad_slot: int = current_slot
+		push_warning("NightShiftGame: slot %d has corrupt/empty resources, clearing and returning to slot picker" % bad_slot)
+		NightShiftSave.clear_slot(bad_slot)
+		if current_slot == bad_slot:
+			current_slot = 0
+		_show_slot_picker()
+		return
 	night_index = int(doc.get("night_index", 0))
 	resources = (doc.get("resources", {}) as Dictionary).duplicate(true)
 	upgrades.clear()
@@ -1079,6 +1489,20 @@ func _load_state_from_doc(doc: Dictionary) -> void:
 	radio_window_left = float(doc.get("radio_window_left", 0.0))
 	radio_tuned_channel = str(doc.get("radio_tuned_channel", ""))
 	radio_contacts_made = int(doc.get("radio_contacts_made", 0))
+	# Difficulty: v4 saves use current_difficulty + difficulty_modifiers; v3
+	# saves only had the integer 'difficulty'. Inherit either, and let
+	# NightShiftSave.normalize_modifiers() bound the dict to current limits.
+	var diff_name: String = str(doc.get("current_difficulty", ""))
+	var diff_int: int = int(doc.get("difficulty", NightShiftSave.DIFFICULTY_NORMAL))
+	if diff_name == "":
+		current_difficulty = "standard" if diff_int == NightShiftSave.DIFFICULTY_NORMAL else "hard"
+	else:
+		current_difficulty = diff_name
+	var saved_mods: Variant = doc.get("difficulty_modifiers", null)
+	if saved_mods is Dictionary and not (saved_mods as Dictionary).is_empty():
+		difficulty_modifiers = NightShiftSave.normalize_modifiers(saved_mods)
+	else:
+		difficulty_modifiers = NightShiftSave.modifiers_for_preset(current_difficulty)
 	# Rebuild day_effects from upgrades
 	day_effects.clear()
 	for k in upgrades:
@@ -1089,6 +1513,7 @@ func _load_state_from_doc(doc: Dictionary) -> void:
 
 
 func _on_start_pressed() -> void:
+	print("DEBUG _on_start_pressed called")
 	night_index = 0
 	resources = data.initial_resource_values()
 	upgrades.clear()
@@ -1100,10 +1525,33 @@ func _on_start_pressed() -> void:
 # PHASE: day
 # ============================================================================
 
+# Day-card gate: a card with `requires_unlocked: ["antenna", ...]` only appears
+# once every hotspot in that list is in `unlocked_hotspots`. Prevents
+# "Anchor Antenna" / "Signal Battery" / "Re-route Cables" from showing on
+# night 3 before antenna unlocks. Cards without the field are unconstrained.
+func _card_unlocked_for_now(card: Dictionary) -> bool:
+	var req: Variant = card.get("requires_unlocked", [])
+	if not (req is Array) or (req as Array).is_empty():
+		return true
+	for h in (req as Array):
+		if not unlocked_hotspots.has(str(h)):
+			return false
+	return true
+
+
 func _show_day() -> void:
+	# Permanent diagnostic probe — count how many times _show_day fires per
+	# probe-window. The number tells which caller (1 = ready, 2 = confim,
+	# 3 = slider chain, 4 = something new).
+	if _dx_debug_probe_phase:
+		_dx_debug_probe_count += 1
+		print("DEBUG _show_day probe call #", _dx_debug_probe_count)
 	phase = "day"
 	_clear_card_layer()
 	card_layer.visible = true
+	# Day picker overlays the room background; hide the night-only hotspots
+	# so their stale state rings don't bleed through.
+	hotspot_layer.visible = false
 	if art.get("day"):
 		bg.texture = art["day"]
 	_play_music("day")
@@ -1124,14 +1572,14 @@ func _show_day() -> void:
 			if cid == "start":
 				continue
 			var card: Dictionary = data.get_card(cid)
-			if not card.is_empty():
+			if not card.is_empty() and _card_unlocked_for_now(card):
 				pickables.append(card)
 		elif entry is String:
 			var cid2: String = str(entry)
 			if cid2 == "start":
 				continue
 			var card2: Dictionary = data.get_card(cid2)
-			if not card2.is_empty():
+			if not card2.is_empty() and _card_unlocked_for_now(card2):
 				pickables.append(card2)
 	# Always add a "skip" card as the last option
 	var skip := {
@@ -1147,10 +1595,17 @@ func _show_day() -> void:
 	pickables.append(skip)
 
 	# Layout: top status, then 3 (or 4) cards in a row, then "preview effects" panel.
+	# With 4 cards at 320px each + 3x18px gaps, total is 1334 > SCREEN_SIZE.x (1280),
+	# pushing the first card off-screen. Shrink card_w when the row would overflow
+	# so n cards always fit between side_margin cushions.
 	var n: int = pickables.size()
-	var card_w: float = 320.0
 	var card_h: float = 220.0
 	var gap: float = 18.0
+	var side_margin: float = 24.0
+	var max_total_w: float = SCREEN_SIZE.x - side_margin * 2.0
+	var card_w: float = 320.0
+	if n > 1:
+		card_w = min(card_w, (max_total_w - (n - 1) * gap) / float(n))
 	var total_w: float = n * card_w + (n - 1) * gap
 	var start_x: float = (SCREEN_SIZE.x - total_w) * 0.5
 	var y: float = 130.0
@@ -1181,12 +1636,41 @@ func _show_day() -> void:
 		card_panel.add_theme_stylebox_override("panel", ps)
 		card_layer.add_child(card_panel)
 
-		var title_lbl := _make_label(Vector2(0, 0), 22, Color(0.96, 0.92, 0.78))
+		# Card icon: art["icons"][card_id] is loaded by NightShiftArt
+		# load_upgrade_icon_textures() into 27 keyed slots covering all
+		# upgrade ids (door_reinforce, window_brace, battery_buffer, etc).
+		# Skip-card has id="start" and no icon — just leave the slot empty.
+		# Icon is a 64x64 badge in the top-left; title shifts right by 70px
+		# to avoid overlap, body/effects start at y=70 below the icon row.
+		var has_icon: bool = false
+		var icons_bucket: Dictionary = art.get("icons", {}) as Dictionary
+		if icons_bucket.has(card_id):
+			var maybe: Variant = icons_bucket[card_id]
+			if maybe is Texture2D:
+				var icon_rect := TextureRect.new()
+				icon_rect.texture = maybe
+				icon_rect.position = Vector2(0, 0)
+				icon_rect.size = Vector2(64, 64)
+				icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				card_panel.add_child(icon_rect)
+				has_icon = true
+
+		# Title shifts right of the icon when present.
+		var title_x: float = 72.0 if has_icon else 0.0
+		var title_lbl := _make_label(Vector2(title_x, 0), 22, Color(0.96, 0.92, 0.78))
 		title_lbl.text = title
 		title_lbl.add_theme_constant_override("outline_size", 4)
+		title_lbl.size = Vector2(card_w - 14 - title_x, 30)
+		title_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		card_panel.add_child(title_lbl)
 
-		var body_lbl := _make_label(Vector2(0, 30), 14, Color(0.85, 0.85, 0.78))
+		# Body / cost / effects shift down by 70px when an icon is in the
+		# top-left so they don't sit underneath the badge.
+		var body_y: float = 70.0 if has_icon else 30.0
+		var cg_y: float = 120.0 if has_icon else 90.0
+		var eff_y: float = 146.0 if has_icon else 116.0
+
+		var body_lbl := _make_label(Vector2(0, body_y), 14, Color(0.85, 0.85, 0.78))
 		body_lbl.text = body
 		body_lbl.size = Vector2(card_w - 28, 50)
 		body_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1202,7 +1686,7 @@ func _show_day() -> void:
 				bottom_text += "  "
 			bottom_text += "收益：%s" % gain_text
 		var cg_lbl := _make_label(
-			Vector2(0, 90),
+			Vector2(0, cg_y),
 			13,
 			Color(0.95, 0.7, 0.5) if cost_text != "" else Color(0.7, 0.85, 0.7)
 		)
@@ -1244,7 +1728,7 @@ func _show_day() -> void:
 		if eff_lines.is_empty():
 			eff_lines.append("（无附加效果）")
 		var eff_text: String = "效果：\n· " + "\n· ".join(eff_lines)
-		var eff_lbl := _make_label(Vector2(0, 116), 12, Color(0.75, 0.82, 0.95))
+		var eff_lbl := _make_label(Vector2(0, eff_y), 12, Color(0.75, 0.82, 0.95))
 		eff_lbl.text = eff_text
 		eff_lbl.size = Vector2(card_w - 28, 80)
 		eff_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1344,17 +1828,32 @@ func _show_night() -> void:
 	phase = "night"
 	_clear_card_layer()
 	card_layer.visible = false
+	# Reveal the hotspot map now that we're back on the room layout.
+	hotspot_layer.visible = true
 	if art.get("night"):
 		bg.texture = art["night"]
+	# Reset the dawn-fade overlay from the previous night. Without this
+	# a successful night-1 dawn fade would carry over to night 2+ and
+	# cover the whole screen with a warm/white tint for the entire
+	# duration of the next night. round-2 visual fix.
+	fx_dawn_target = 0.0
+	fx_dawn_alpha = 0.0
+	# Reset the procedural background event scheduler so night 2+ has
+	# a fresh cadence of background warnings (see _update_events).
+	_proc_next_warning_at = -1.0
+	for id in hotspots:
+		if hotspots[id].has("proc_cooldown"):
+			hotspots[id]["proc_cooldown"] = 0.0
 	_play_music("night_early")
 
 	var level: Dictionary = NightShiftLevels.LEVELS[night_index]
 	var night_def: Dictionary = data.get_night(night_index)
 
 	night_duration = float(night_def.get("duration", level.get("duration", 60.0)))
-	# Hard mode: shorter nights (more time pressure) + more spawn pressure
-	if current_difficulty == NightShiftSave.DIFFICULTY_HARD:
-		night_duration *= 0.8
+	# Difficulty-driven night length: harder presets get shorter nights
+	# (more time pressure). Capped so casual can never exceed +50%.
+	var night_mod: float = clamp(1.4 - float(difficulty_modifiers.get("enemy_count", 1.0)) * 0.3, 0.7, 1.5)
+	night_duration *= night_mod
 	night_elapsed = 0.0
 	survived = false
 	player_target_id = ""
@@ -1456,6 +1955,7 @@ func _show_night() -> void:
 		_log("第 %d 夜开始。" % (night_index + 1))
 
 	_rebuild_hotspot_visuals()
+	_rebuild_zombie_outside_sprites()
 	_draw_player()
 	_update_status_label()
 	_update_visual_feedback()
@@ -1505,29 +2005,88 @@ func _rebuild_hotspot_visuals() -> void:
 		hotspot_layer.add_child(node)
 
 
+# Build / refresh one zombie sprite per barrier hotspot (door + window).
+# Sprites start hidden; _world_tick() flips them visible and animates them
+# based on telegraph state. Sprites are placed at the hotspot position
+# plus an anchor offset so doors have the body extending UP (off-screen)
+# and windows have it extending SIDE (off-screen left/right).
+func _rebuild_zombie_outside_sprites() -> void:
+	if zombie_outside_layer == null:
+		return
+	for child in zombie_outside_layer.get_children():
+		child.queue_free()
+	zombie_outside_sprites.clear()
+	for id in hotspots:
+		var h: Dictionary = hotspots[id]
+		if h.get("kind", "") != "barrier":
+			continue
+		var sprite := Sprite2D.new()
+		sprite.name = "ZombieOutside_%s" % id
+		sprite.texture = _zombie_tex_for(id, false)
+		sprite.centered = true
+		var anchor: Vector2 = WorldFx.zombie_anchor_offset(id)
+		sprite.position = h["pos"] + anchor
+		# Approx target height: ~360px on a 720-tall screen. The texture is
+		# 1434x1920 so a scale of 0.18 gives ~345px tall.
+		sprite.scale = Vector2(0.18, 0.18)
+		sprite.modulate.a = 0.0
+		sprite.visible = false
+		zombie_outside_layer.add_child(sprite)
+		zombie_outside_sprites[id] = {
+			"sprite": sprite,
+			"sway_acc": {"sway_phase": 0.0},
+			"last_phase": WorldFx.ZOMBIE_PHASE_HIDDEN,
+		}
+
+
+# Pick the right texture pair for a hotspot. Doors use door sprites;
+# windows use window sprites. `breach` selects between approach / breach.
+func _zombie_tex_for(id: String, breach: bool) -> Texture2D:
+	var is_window: bool = id.find("window") >= 0
+	if breach:
+		return zombie_breach_window_tex if is_window else zombie_breach_door_tex
+	return zombie_approach_window_tex if is_window else zombie_approach_door_tex
+
+
 func _make_hotspot_node(id: String, data_dict: Dictionary) -> Button:
-	# Button is a Control — set its top-left so that the clickable area is centered on
-	# the hotspot's world position. We use a 72x90 control so the small integrity bar
-	# has room to sit just under the circle without spilling into the next hotspot.
+	# Button is a Control — set its top-left so that the clickable area is
+	# centered on the hotspot's world position. The button footprint is
+	# HOTSPOT_BTN_SIZE (art + a thin integrity bar). The Art TextureRect
+	# is the FIRST child so it renders BEHIND everything else; HotspotDot
+	# then draws the state overlays (progress arc, warning, target ring,
+	# locked) on top of the illustration.
 	var btn := Button.new()
 	var pos: Vector2 = data_dict["pos"]
-	btn.position = pos - Vector2(36, 36)
-	btn.size = Vector2(72, 90)
+	btn.position = pos - Vector2(HOTSPOT_ART_SIZE.x * 0.5, HOTSPOT_ART_SIZE.y * 0.5)
+	btn.size = HOTSPOT_BTN_SIZE
 	btn.flat = true
 	btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	btn.focus_mode = Control.FOCUS_NONE
 
-	# The circle (HotspotDot draws itself via _draw).
+	# ART — the actual hotspot illustration (front_door/window/generator/
+	# antenna/medbay/storage/radio). Texture is set later by
+	# _update_visual_feedback via NightShiftArt.hotspot_texture_key().
+	var art := TextureRect.new()
+	art.name = "Art"
+	art.position = Vector2(0, 0)
+	art.size = HOTSPOT_ART_SIZE
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(art)
+
+	# HotspotDot draws the state overlays (progress arc, warning ring,
+	# target ring, locked). It is sized to match the new art footprint.
 	var dot := HotspotDot.new()
 	dot.name = "Dot"
 	dot.position = Vector2(0, 0)
 	btn.add_child(dot)
 
-	# Integrity bar background (under the dot, sits in y=74..80 of the control).
+	# Integrity bar background (under the art, sits in y=120..128).
 	var bar_bg := ColorRect.new()
 	bar_bg.name = "BarBg"
-	bar_bg.position = Vector2(8, 74)
-	bar_bg.size = Vector2(56, 6)
+	bar_bg.position = Vector2(8, 124)
+	bar_bg.size = Vector2(104, 6)
 	bar_bg.color = Color(0, 0, 0, 0.6)
 	bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(bar_bg)
@@ -1535,17 +2094,17 @@ func _make_hotspot_node(id: String, data_dict: Dictionary) -> Button:
 	# Integrity bar fill
 	var bar := ColorRect.new()
 	bar.name = "Bar"
-	bar.position = Vector2(8, 74)
-	bar.size = Vector2(56, 6)
+	bar.position = Vector2(8, 124)
+	bar.size = Vector2(104, 6)
 	bar.color = Color(0.4, 0.9, 0.4)
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(bar)
 
-	# Label above the circle
+	# Label above the art
 	var lbl := Label.new()
 	lbl.name = "Label"
 	lbl.position = Vector2(-4, -22)
-	lbl.size = Vector2(80, 18)
+	lbl.size = Vector2(128, 18)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.add_theme_color_override("font_color", Color.WHITE)
 	lbl.add_theme_color_override("font_outline_color", Color.BLACK)
@@ -1591,6 +2150,15 @@ func _on_hotspot_pressed(id: String) -> void:
 # ============================================================================
 
 func _process(delta: float) -> void:
+	# Report-music transition: when a one-shot success/failure sting ends,
+	# the looping `music_report` bed takes over so the report screen has
+	# its own ambient music instead of silence. Flag-based polling is more
+	# robust than `await music_player.finished` because it survives the
+	# player advancing to day or retrying mid-sting.
+	if _pending_report_music and music_player:
+		if not music_player.playing:
+			_play_music("report", true)
+			_pending_report_music = false
 	if phase == "night":
 		_update_night(delta)
 
@@ -1602,6 +2170,7 @@ func _update_night(delta: float) -> void:
 	_update_events(delta)
 	_update_radio(delta)
 	_update_enemies(delta)
+	_tick_npcs(delta)
 	_update_visual_feedback()
 	_update_status_label()
 	_update_radio_panel()
@@ -1712,6 +2281,10 @@ func _fx_tick(delta: float) -> void:
 				fx_particles, foot, Vector2(-4.0 + randf() * 8.0, -6.0 - randf() * 4.0),
 				0.28, Color(0.75, 0.68, 0.55, 0.5), 1.2, Fx.PARTICLE_KIND_DOT, 80.0
 			)
+			# One SFX per dust puff (alternates phase so a left/right pattern
+			# is possible later). Cheap: the stream's already loaded.
+			_play_sfx("footstep")
+			fx_footstep_phase += 1
 	else:
 		# Drain the accumulator while idle so the first step after a long
 		# pause doesn't immediately spit a cloud of dust.
@@ -1748,6 +2321,72 @@ func _fx_tick(delta: float) -> void:
 		fx_layer._fx_set_threat_arrows(fx_threat_arrows, fx_threat_phase)
 		fx_layer._fx_set_overlays(fx_static_alpha, fx_dawn_alpha)
 		fx_layer._fx_mark_dirty()
+
+	# World-layer parallax + outside-zombie sprites. Independent from the
+	# rest of the FX tick because the world layer renders in its own scene
+	# tree positions (CanvasLayer-anchored, not shake-offset).
+	_world_tick(delta)
+
+
+# Drive world-layer parallax + per-hotspot zombie sprites. Called once per
+# frame from _fx_tick. Reads fx_telegraphs + hotspots; mutates Sprite2D
+# state. Pure data in / draw out — no particle spawning, no events fired.
+func _world_tick(delta: float) -> void:
+	# 1. Parallax drift on the background plates.
+	world_parallax_phase += delta
+	if world_layer_far:
+		var far_off: Vector2 = WorldFx.parallax_offset(world_parallax_phase, 0, 6.0)
+		world_layer_far.position = far_off
+	if world_layer_mid:
+		var mid_off: Vector2 = WorldFx.parallax_offset(world_parallax_phase, 1, 10.0)
+		world_layer_mid.position = mid_off
+
+	# 2. Build a quick id → telegraph lookup so the sprite loop is O(N+M).
+	var telegraph_by_id: Dictionary = {}
+	for t in fx_telegraphs:
+		telegraph_by_id[str(t.get("hotspot_id", ""))] = t
+
+	# 3. Update each barrier hotspot's sprite based on its current state.
+	for id in zombie_outside_sprites:
+		var entry: Dictionary = zombie_outside_sprites[id]
+		var sprite: Sprite2D = entry["sprite"]
+		if sprite == null:
+			continue
+		var sway_acc: Dictionary = entry["sway_acc"]
+		# Resolve state → animation values
+		var state: Dictionary
+		if telegraph_by_id.has(id):
+			state = WorldFx.zombie_phase_from_telegraph(
+				telegraph_by_id[id], delta, sway_acc
+			)
+		elif hotspots.has(id) and bool(hotspots[id].get("assault", false)):
+			# Assault is on but no telegraph is currently scheduled
+			# (e.g. telegraph already fired but the event hasn't reset yet)
+			state = WorldFx.zombie_phase_persisting(sway_acc, delta)
+		else:
+			state = WorldFx.zombie_phase_hidden(sway_acc)
+		# Swap texture when crossing into / out of breach phase
+		var new_phase: int = int(state["phase"])
+		if new_phase != int(entry.get("last_phase", WorldFx.ZOMBIE_PHASE_HIDDEN)):
+			var breach: bool = (new_phase == WorldFx.ZOMBIE_PHASE_BREACH)
+			sprite.texture = _zombie_tex_for(id, breach)
+			entry["last_phase"] = new_phase
+		# Apply animation values
+		var alpha: float = float(state["alpha"])
+		var bob: float = float(state["bob_y"])
+		var sc: float = float(state["scale"])
+		var col: Color = sprite.modulate
+		col.a = alpha
+		sprite.modulate = col
+		var anchor: Vector2 = WorldFx.zombie_anchor_offset(id)
+		var hotspot_pos: Vector2 = (
+			hotspots[id]["pos"] if hotspots.has(id) else Vector2.ZERO
+		)
+		sprite.position = hotspot_pos + anchor + Vector2(0.0, bob)
+		sprite.scale = Vector2(0.18, 0.18) * sc
+		# Visibility: only draw if alpha is above a tiny threshold so we
+		# don't keep an invisible-but-still-rendering sprite around.
+		sprite.visible = alpha > 0.01
 
 
 func _fx_fire_telegraph(t: Dictionary) -> void:
@@ -1831,6 +2470,9 @@ func _fx_on_repair_tick(id: String, delta: float) -> void:
 		fx_combo_count += steps
 		# Trust bonus per chain step, scaled lightly so a long combo pays
 		# meaningful trust without trivialising the resource.
+		# Wood-plank nail SFX fires once per combo step (not every frame) so
+		# the player gets a percussive hit on each chain payout.
+		_play_sfx("wood_plank_nail")
 		_apply_trust_delta(COMBO_TRUST_BONUS, "repair combo x%d" % fx_combo_count)
 		_log("维修连击 x%d (+%d 信任)" % [fx_combo_count, COMBO_TRUST_BONUS])
 
@@ -1889,6 +2531,12 @@ func _complete_radio_contact() -> void:
 	radio_contact_progress = 0.0
 	radio_contacts_made += 1
 	night_stats["radio_contacts"] = int(night_stats.get("radio_contacts", 0)) + 1
+	if not _ach_first_contact:
+		_ach_first_contact = true
+		_unlock_ach("first_contact")
+	if radio_target_channel == "victor" and not _ach_reach_victor:
+		_ach_reach_victor = true
+		_unlock_ach("reach_victor")
 	# Reward hook: a successful contact raises trust.
 	_apply_trust_delta(1, "radio contact")
 	_play_sfx("unlock")
@@ -1958,7 +2606,9 @@ func _save_progress() -> void:
 		"radio_tuned_channel": radio_tuned_channel,
 		"radio_contacts_made": radio_contacts_made,
 		"tutorial_done": current_slot > 0 and NightShiftSave.read(current_slot).get("tutorial_done", false),
-		"difficulty": current_difficulty,
+		"current_difficulty": current_difficulty,
+		"difficulty_modifiers": difficulty_modifiers,
+		"difficulty": NightShiftSave.DIFFICULTY_HARD if current_difficulty == "hard" else NightShiftSave.DIFFICULTY_NORMAL,
 		"ng_plus_count": ng_plus_count,
 	}, current_slot)
 
@@ -2019,10 +2669,12 @@ func _update_enemies(delta: float) -> void:
 
 
 func _spawn_enemy_swarm(id: String, h: Dictionary) -> void:
-	# Hard mode spawns ~50% more enemies per assault.
+	# Difficulty enemy_count multiplier scales the per-assault swarm size.
+	# 0.5x = ~half as many, 2.0x = double. Floor of 1 enemy so even casual
+	# has visible pressure on the screen.
 	var count: int = 2 + rng.randi_range(0, 2)
-	if current_difficulty == NightShiftSave.DIFFICULTY_HARD:
-		count = int(count * 1.5)
+	var enemy_mult: float = float(difficulty_modifiers.get("enemy_count", 1.0))
+	count = max(1, int(round(float(count) * enemy_mult)))
 	var center: Vector2 = h["pos"]
 	var list: Array = []
 	for i in range(count):
@@ -2037,7 +2689,7 @@ func _spawn_enemy_swarm(id: String, h: Dictionary) -> void:
 	_play_sfx("breach_alarm")
 
 
-func _dismiss_enemy_swarm(id: String) -> void:
+func _dismiss_enemy_swarm(_id: String) -> void:
 	# Let them despawn naturally on next tick
 	pass
 
@@ -2049,7 +2701,10 @@ func _redraw_enemy_visuals() -> void:
 		var list: Array = enemy_tokens[id]
 		for e in list:
 			var dot := Node2D.new()
-			dot.position = e["pos"]
+			# Jitter (±2 px per redraw) so the zombie read as "shambling",
+			# not as a person standing still. polish spec §5.2.
+			var jitter := Vector2(rng.randf_range(-2.0, 2.0), rng.randf_range(-2.0, 2.0))
+			dot.position = (e["pos"] as Vector2) + jitter
 			dot.set_script(_make_enemy_dot_script(float(e["size"])))
 			enemy_layer.add_child(dot)
 
@@ -2060,15 +2715,76 @@ func _make_enemy_dot_script(size: float) -> GDScript:
 extends Node2D
 func _draw() -> void:
 	var s := %f
-	# red body
-	draw_circle(Vector2.ZERO, s, Color(0.85, 0.15, 0.12, 0.95))
-	# dark inner
-	draw_circle(Vector2.ZERO, s * 0.5, Color(0.45, 0.05, 0.04, 1.0))
-	# glow
-	draw_arc(Vector2.ZERO, s * 1.4, 0, TAU, 18, Color(1.0, 0.4, 0.3, 0.45), 1.5)
+	# Pale-green body — "definitely not a person" tint (polish spec §5.2).
+	draw_circle(Vector2.ZERO, s, Color(0.55, 0.72, 0.48, 0.95))
+	# Dark-green inner
+	draw_circle(Vector2.ZERO, s * 0.5, Color(0.18, 0.32, 0.16, 1.0))
+	# Sickly glow
+	draw_arc(Vector2.ZERO, s * 1.4, 0, TAU, 18, Color(0.65, 0.85, 0.55, 0.45), 1.5)
 """ % size
 	script.reload()
 	return script
+
+
+# Called by NightShiftActors.decide_target as the `unlocked` callable.
+# Returns true when `id` is in the current night's unlocked_hotspots.
+func _is_unlocked(id: String) -> bool:
+	return unlocked_hotspots.has(id)
+
+
+# Per-NPC tick. Implements polish spec §4.2 rules 1-4 via
+# NightShiftActors.decide_target + state-machine timers. Behaviour is
+# intentionally light: emergency-only target pick, soft-lock 2s after a
+# target change, defer to player, walk cooldown 1.5s after a target change.
+# When close enough to the target hotspot, the NPC softly restores value
+# (Nora ~12/s on windows, Elias ~10/s on antenna/radio) and clears the
+# breach_timer if it had started ticking down.
+func _tick_npcs(delta: float) -> void:
+	if npc_state.is_empty():
+		return
+	var unlocked := Callable(self, "_is_unlocked")
+	var antenna_low: bool = hotspots.has("antenna") and \
+			float(hotspots["antenna"].get("value", 100.0)) < 30.0
+	for npc_id in npc_state.keys():
+		var st: Dictionary = npc_state[npc_id]
+		# Tick the timers down.
+		if float(st.get("commit_timer", 0.0)) > 0.0:
+			st["commit_timer"] = float(st["commit_timer"]) - delta
+		if float(st.get("walk_timer", 0.0)) > 0.0:
+			st["walk_timer"] = float(st["walk_timer"]) - delta
+		# Re-evaluate target every ~0.2s (decide_target internally enforces
+		# the soft-commit 2s window).
+		var eval_t: float = float(st.get("eval_timer", 0.0)) - delta
+		if eval_t <= 0.0:
+			st["eval_timer"] = 0.2
+			var want: String = NightShiftActors.decide_target(
+					npc_id, hotspots, unlocked, player_target_id, npc_state,
+					hotspots.has("radio"), radio_completed, blackout, antenna_low, {})
+			if want != st.get("target", ""):
+				st["target"] = want
+				st["commit_timer"] = 2.0
+				st["walk_timer"] = 1.5
+		# Walk toward target when walk cooldown is over.
+		var tgt_id: String = str(st.get("target", ""))
+		if tgt_id != "" and hotspots.has(tgt_id) and float(st.get("walk_timer", 0.0)) <= 0.0:
+			var hp: Dictionary = hotspots[tgt_id]
+			var np: Vector2 = st["pos"]
+			var tp: Vector2 = hp["pos"]
+			var d := tp - np
+			if d.length() > 40.0:
+				st["pos"] = np + d.normalized() * float(st.get("speed", 180.0)) * delta
+			else:
+				# Close enough — softly repair and clear breach countdown.
+				var rate: float = 12.0
+				if npc_id == "elias":
+					rate = 10.0
+				var cur: float = float(hp.get("value", 100.0))
+				var cap: float = float(hp.get("max_value", 100.0))
+				hp["value"] = min(cap, cur + rate * delta)
+				if float(hp.get("breach_timer", -1.0)) >= 0.0:
+					hp["breach_timer"] = -1.0
+				hotspots[tgt_id] = hp
+		npc_state[npc_id] = st
 
 
 func _update_player_movement(delta: float) -> void:
@@ -2083,6 +2799,7 @@ func _update_player_movement(delta: float) -> void:
 	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 		move.x += 1
 	var current_speed: float = PLAYER_SPEED + day_effects.get_player_speed_bonus()
+	current_speed *= float(difficulty_modifiers.get("player_speed", 1.0))
 	if move.length() > 0:
 		move = move.normalized()
 		player_pos += move * current_speed * delta
@@ -2135,6 +2852,9 @@ func _update_player_target_reached() -> void:
 
 
 func _update_hotspots(delta: float) -> void:
+	# Reset per-frame repair-action flag. _draw_player reads it to
+	# decide whether to show the hammer sprite.
+	player_repair_active = false
 	# Player-side repair
 	for id in hotspots:
 		var h: Dictionary = hotspots[id]
@@ -2153,6 +2873,12 @@ func _update_hotspots(delta: float) -> void:
 			# COMBO_TRUST_BONUS trust when the player moves on. Resets if
 			# the player walks away and the timer expires.
 			_fx_on_repair_tick(id, delta)
+			# Flag the repair-action animation as active for this frame so
+			# _draw_player swaps in the hammer sprite. Only barriers get
+			# the hammer cycle (radio / medbay have their own flows).
+			if PlayerRepairFx.is_repairable_hotspot(str(h.get("kind", ""))):
+				player_repair_active = true
+				player_repair_timer += delta
 
 	# Background pressure decay (no events) — small slow drain
 	for id in hotspots:
@@ -2160,17 +2886,18 @@ func _update_hotspots(delta: float) -> void:
 		if h["breach_timer"] >= 0.0:
 			continue
 		var kind: String = h["kind"]
+		var drain_mod: float = float(difficulty_modifiers.get("drain_rate", 1.0))
 		var drain := 0.0
 		if kind == "barrier" and h["assault"]:
-			drain = 12.0 * delta * day_effects.get_drain_multiplier(str(id), "barrier_assault")
+			drain = 12.0 * delta * day_effects.get_drain_multiplier(str(id), "barrier_assault") * drain_mod
 		elif kind == "barrier" and h["warning"]:
-			drain = 4.0 * delta
+			drain = 4.0 * delta * drain_mod
 		elif kind == "generator":
-			drain = 3.0 * delta * day_effects.get_drain_multiplier(str(id), "generator")
+			drain = 3.0 * delta * day_effects.get_drain_multiplier(str(id), "generator") * drain_mod
 		elif kind == "antenna" and h["active"]:
-			drain = 4.0 * delta * day_effects.get_drain_multiplier(str(id), "support")
+			drain = 4.0 * delta * day_effects.get_drain_multiplier(str(id), "support") * drain_mod
 		elif kind == "support" and h["active"]:
-			drain = 2.0 * delta * day_effects.get_drain_multiplier(str(id), "support")
+			drain = 2.0 * delta * day_effects.get_drain_multiplier(str(id), "support") * drain_mod
 		if drain > 0.0:
 			h["value"] = max(0.0, h["value"] - drain)
 
@@ -2223,7 +2950,7 @@ func _update_hotspots(delta: float) -> void:
 		var h: Dictionary = hotspots[id]
 		if h["breach_timer"] >= 0.0:
 			h["breach_timer"] += delta
-			if h["breach_timer"] >= BREACH_GRACE:
+			if h["breach_timer"] >= _dx_breach_grace():
 				_end_night(false)
 				return
 
@@ -2240,7 +2967,7 @@ func _update_events(delta: float) -> void:
 		var etype: String = str(ev.get("type", ""))
 		var ev_time: float = float(ev.get("time", 0.0))
 		if not events_done.has(ev_id) and etype == "assault":
-			if ev_time - night_elapsed <= FX_TELEGRAPH_LEAD_TIME and not bool(ev.get("telegraph_scheduled", false)):
+			if ev_time - night_elapsed <= _dx_telegraph_lead() and not bool(ev.get("telegraph_scheduled", false)):
 				Fx.telegraph_schedule(
 					fx_telegraphs,
 					str(ev.get("target", "")),
@@ -2263,6 +2990,91 @@ func _update_events(delta: float) -> void:
 		if str(ev.get("type", "")) == "assault" and bool(ev.get("telegraph_scheduled", false)):
 			continue
 		_trigger_event(ev)
+
+	# Third pass: procedural background warnings. Decays per-hotspot
+	# cooldowns, then if the scheduler has reached the next-fire time
+	# (or the night just started, when _proc_next_warning_at == -1.0)
+	# picks a random eligible barrier hotspot and triggers a warning.
+	# This is the round-2 pacing fix: night 2-10 used to have 40-90s
+	# of dead air between fixed events; now we drip a fresh warning
+	# every 6-10s so the player is always within one teleport of
+	# needing to run.
+	_proc_tick_background_warnings(delta)
+
+
+func _proc_tick_background_warnings(delta: float) -> void:
+	# Decay per-hotspot cooldowns.
+	for id in hotspots:
+		var h: Dictionary = hotspots[id]
+		var cd: float = float(h.get("proc_cooldown", 0.0))
+		if cd > 0.0:
+			h["proc_cooldown"] = max(0.0, cd - delta)
+	# Initialize the scheduler on the first tick of a fresh night so
+	# the first procedural warning lands ~8s in (gives the player a
+	# brief moment to breathe + orients to the room).
+	if _proc_next_warning_at < 0.0:
+		_proc_next_warning_at = night_elapsed + 8.0
+		return
+	if night_elapsed < _proc_next_warning_at:
+		return
+	# Build the candidate list: barrier hotspots that are healthy,
+	# not already in warning/assault/breach, and off cooldown. We allow
+	# any health level -- the round-2 pacing fix is specifically to
+	# keep the player active from the very first tick of a fresh night,
+	# so a fresh full-health door is a valid procedural target. The
+	# 25s per-hotspot cooldown handles the "don't spam the same door"
+	# concern.
+	var candidates: Array = []
+	for id in hotspots:
+		var h: Dictionary = hotspots[id]
+		if str(h.get("kind", "")) != "barrier":
+			continue
+		if h.get("assault", false) or h.get("warning", false):
+			continue
+		if h.get("breach_timer", -1.0) >= 0.0:
+			continue
+		if float(h.get("proc_cooldown", 0.0)) > 0.0:
+			continue
+		candidates.append(id)
+	if candidates.is_empty():
+		# No eligible hotspot right now -- try again in 4s.
+		_proc_next_warning_at = night_elapsed + 4.0
+		return
+	# Pick a random candidate and trigger a warning on it.
+	var pick_id: String = candidates[randi() % candidates.size()]
+	var pick: Dictionary = hotspots[pick_id]
+	pick["warning"] = true
+	pick["proc_cooldown"] = PROC_HOTSPOT_COOLDOWN
+	_log("远处传来声响——%s" % _hotspot_label(pick_id))
+	Fx.telegraph_schedule(
+		fx_telegraphs,
+		pick_id,
+		_dx_telegraph_lead(),
+		"assault"
+	)
+	# Schedule the next warning 6-10s out, jittered so the cadence
+	# doesn't feel mechanical. Slightly tighter cadence as the night
+	# wears on so the late-game pressure keeps ramping.
+	# round-2.1: base cadence switches from 6-10s (night 1-4) to
+	# 4-7s (night 5+) so the late-game pressure never lets the
+	# player stand still. The intra-night ramp on top of the base
+	# still subtracts 1.5/2.0s as the night progresses.
+	var base_min: float
+	var base_max: float
+	if night_index >= PROC_WARNING_LATE_NIGHT:
+		base_min = PROC_WARNING_LATE_MIN
+		base_max = PROC_WARNING_LATE_MAX
+	else:
+		base_min = PROC_WARNING_INTERVAL_MIN
+		base_max = PROC_WARNING_INTERVAL_MAX
+	var ramp: float = clamp(night_elapsed / max(1.0, night_duration), 0.0, 1.0)
+	var min_gap: float = base_min - 1.5 * ramp
+	var max_gap: float = base_max - 2.0 * ramp
+	# Floor at 2.0s on the jittered max so we never spawn two
+	# warnings back-to-back even at full late-night ramp.
+	min_gap = max(2.0, min_gap)
+	max_gap = max(min_gap + 0.5, max_gap)
+	_proc_next_warning_at = night_elapsed + min_gap + randf() * (max_gap - min_gap)
 
 
 func _trigger_event(ev: Dictionary) -> void:
@@ -2310,7 +3122,7 @@ func _trigger_event(ev: Dictionary) -> void:
 
 
 func _update_visual_feedback() -> void:
-	# Per-hotspot: bar fill + circle state
+	# Per-hotspot: art texture + integrity bar + circle state overlays
 	for child in hotspot_layer.get_children():
 		if not child.has_meta("hotspot_id"):
 			continue
@@ -2319,11 +3131,31 @@ func _update_visual_feedback() -> void:
 			continue
 		var h: Dictionary = hotspots[id]
 
+		# Art texture — pick the illustration that matches the current
+		# state via NightShiftArt.hotspot_texture_key (intact / warning /
+		# assault / braced / broken for barriers; idle / low_power /
+		# blackout / repaired for generator; etc).
+		var art_node: TextureRect = child.get_node_or_null("Art") as TextureRect
+		if art_node != null:
+			var art_bucket: Dictionary = art.get("hotspots", {}) as Dictionary
+			var ctx: Dictionary = {
+				"blackout": blackout,
+				"radio_completed": radio_completed,
+				"radio_missed": radio_missed,
+				"radio_available": radio_available,
+				"player_target_id": player_target_id,
+				"player_at_target": player_at_target,
+			}
+			var tex_key: String = NightShiftArt.hotspot_texture_key(id, h, ctx)
+			var new_tex: Texture2D = art_bucket.get(tex_key, null) if tex_key != "" else null
+			if new_tex != null and art_node.texture != new_tex:
+				art_node.texture = new_tex
+
 		# Integrity bar (color + width)
 		var bar: ColorRect = child.get_node_or_null("Bar") as ColorRect
 		var pct: float = h["value"] / h["max_value"]
 		if bar:
-			bar.size.x = 56.0 * pct
+			bar.size.x = 104.0 * pct
 			if pct > 0.6:
 				bar.color = Color(0.4, 0.9, 0.4)
 			elif pct > 0.3:
@@ -2359,21 +3191,94 @@ func _update_visual_feedback() -> void:
 
 
 func _draw_player() -> void:
-	player_token.position = player_pos
-	# player_facing and player_walk_frame are updated in _update_player_movement.
-	# Idle (no movement) shows frame 0 of current facing; moving cycles all 12 frames.
+	# Unified player visual across idle / walking / repair:
+	#   - All three states use the same walk-frame art (128x160 baseline)
+	#     so the player footprint never jumps. Previously idle switched
+	#     to actor_player_*.png (768x1024, content bbox 52%x91%) which
+	#     displayed at ~116 px tall vs walk's ~97 px tall -- a visible
+	#     size jump on every transition.
+	#   - The previous player_repair_*.png overlay is dropped entirely:
+	#     per-alpha-channel audit, alpha=0 pixels in start/mid/end carry
+	#     RGB (255,255,255 white) / (30,30,30 dark-gray) / (82,82,82
+	#     mid-gray) respectively, so layering produced a colored halo
+	#     around the player. polish spec §4.5.
+	#   - Player silhouette is NEVER tilted or bobbed during repair -- the
+	#     swinging reads on a separate procedural hammer sprite next to
+	#     the player (hammer_sprite). Player itself stays locked to
+	#     player_pos with rotation=0, so idle / walking / repair share
+	#     the exact same silhouette.
 	var frames: Array = walk_frames.get(player_facing, [])
-	if not frames.is_empty() and frames[0] != null:
-		var fi: int = player_walk_frame if player_is_moving else 0
-		fi = clamp(fi, 0, frames.size() - 1)
-		if frames[fi] != null:
-			player_token.texture = frames[fi]
+	var tex: Texture2D = null
+	if not frames.is_empty():
+		if player_is_moving:
+			var fi: int = clamp(player_walk_frame, 0, frames.size() - 1)
+			tex = frames[fi] if frames[fi] != null else frames[0]
 		else:
-			player_token.texture = frames[0]
+			tex = frames[0]
+	if tex != null:
+		player_token.texture = tex
+		player_token.scale = Vector2(1.0, 1.0)
+		player_token.flip_h = false
+		player_token.flip_v = false
+		player_token.position = player_pos
+		player_token.rotation = 0.0
 		player_token.modulate.a = 1.0
 	else:
 		# Fallback: hide token (no colored circle in v0.5)
 		player_token.modulate.a = 0.0
+		player_token.position = player_pos
+		player_token.rotation = 0.0
+
+	# Drive the procedural hammer sprite. Sits at the player's hand
+	# offset, rotates ±0.5 rad on PlayerRepairFx REPAIR_CYCLE_SEC
+	# (~0.36s = ~3 swings per repair bar). Hidden when not repairing so
+	# the player isn't dragging a hammer around during walk / idle.
+	if hammer_sprite != null:
+		if player_repair_active:
+			hammer_sprite.visible = true
+			# Hand offset relative to the player token. Player sprite
+			# is 128x160; hand sits at top-right so the hammer is
+			# clearly visible against the player silhouette.
+			hammer_sprite.position = player_pos + Vector2(22.0, -54.0)
+			var phase: float = fmod(player_repair_timer, PlayerRepairFx.REPAIR_CYCLE_SEC) / PlayerRepairFx.REPAIR_CYCLE_SEC
+			# Two-segment swing: phase 0.0..0.45 -> swing DOWN (hammer
+			# arcs from -PI/3 back to -PI/6+1.8, max forward thrust near
+			# phase=0.5); phase 0.45..1.0 -> swing BACK (returns to
+			# -PI/3 ready position). The swing amplitude is large (1.8
+			# rad = ~103deg) so the hammer motion reads as a committed,
+			# energetic hammer-strike even at 1280x720. round-2 visual
+			# fix per user feedback: "哪怕边上加上锤子挥动的动画呢".
+			# round-2.1 tweak: over-arm thrust bumped 1.4 -> 1.8 rad
+			# (~23deg more forward) so the strike carries more weight
+			# and the recovery arc is visibly longer / less jerky.
+			var swing: float
+			if phase < 0.45:
+				# Forward swing: -PI/3 (60deg up) -> -PI/6 + 1.8 (over-arm thrust)
+				swing = -PI / 3.0 + (phase / 0.45) * (PI / 6.0 + 1.8)
+			else:
+				# Recovery swing: back to -PI/3 over the remaining 0.55 phase
+				var recover_t: float = (phase - 0.45) / 0.55
+				swing = (-PI / 6.0 + 1.8) - recover_t * (PI / 3.0 + PI / 6.0 + 1.8)
+			hammer_sprite.rotation = swing
+			# Force a redraw -- Node2D's _draw caches its output across
+			# frames if no top-level transform component changed (we only
+			# tweak rotation, which on some Godot builds is treated as a
+			# no-op for the redraw queue). queue_redraw() guarantees the
+			# next render pass picks up the new rotation.
+			hammer_sprite.queue_redraw()
+		else:
+			hammer_sprite.visible = false
+			hammer_sprite.rotation = 0.0
+			# Reset timer so next repair starts cleanly from FRAME_START.
+			player_repair_timer = 0.0
+
+	# Drop the broken repair overlay (asset audit: PNGs not fully
+	# transparent -- alpha=0 pixels carry RGB 255/30/82 for start/mid/end).
+	# The token stays in the tree so existing references don't null out,
+	# but it's permanently invisible so the halo can't appear.
+	if player_repair_token != null:
+		player_repair_token.visible = false
+		player_repair_token.modulate.a = 0.0
 
 
 # ============================================================================
@@ -2384,6 +3289,14 @@ func _end_night(success: bool) -> void:
 	phase = "night_report"
 	survived = success
 	_play_sfx("unlock" if success else "fail")
+	# One-shot sting: success/failure track plays once (not looped), then the
+	# report-screen loop bed (`music_report`) takes over once the sting ends.
+	# _pending_report_music is checked in _process and triggers the transition.
+	if success:
+		_play_music("success", false)
+	else:
+		_play_music("failure", false)
+	_pending_report_music = true
 	# Dawn fade: only on success — a failed night shouldn't get the warm
 	# sunrise, the player needs to feel the failure state.
 	if success:
@@ -2397,12 +3310,61 @@ func _end_night(success: bool) -> void:
 		for unlock in night_def.get("success_unlocks", []):
 			var u: String = str(unlock)
 			if u in ["nora", "elias"]:
-				allies[u] = true
-				_log("%s 加入" % ("Nora" if u == "nora" else "Elias"))
+				if not bool(allies.get(u, false)):
+					allies[u] = true
+					if u == "nora" and not _ach_recruit_nora:
+						_ach_recruit_nora = true
+						_unlock_ach("recruit_nora")
+					elif u == "elias" and not _ach_recruit_elias:
+						_ach_recruit_elias = true
+						_unlock_ach("elias_recruit")
+					if bool(allies.get("nora", false)) and bool(allies.get("elias", false)) and bool(allies.get("victor", false)):
+						if not _ach_all_three:
+							_ach_all_three = true
+							_unlock_ach("all_three_allies")
+					_log("%s 加入" % ("Nora" if u == "nora" else "Elias"))
+					# Initialise runtime state for the new NPC. Default position
+					# mirrors spec §4.5 — Nora on the right flank, Elias on the left.
+					if u == "nora" and not npc_state.has("nora"):
+						npc_state["nora"] = {
+							"pos": Vector2(800.0, 360.0),
+							"target": "",
+							"commit_timer": 0.0,
+							"walk_timer": 0.0,
+							"eval_timer": 0.2,
+							"speed": 180.0,
+						}
+					elif u == "elias" and not npc_state.has("elias"):
+						npc_state["elias"] = {
+							"pos": Vector2(480.0, 360.0),
+							"target": "",
+							"commit_timer": 0.0,
+							"walk_timer": 0.0,
+							"eval_timer": 0.2,
+							"speed": 180.0,
+						}
 			elif u in ["right_window", "back_door", "radio", "antenna", "medbay", "storage"]:
 				if not unlocked_hotspots.has(u):
 					unlocked_hotspots.append(u)
 					_log("解锁：%s" % _hotspot_label(u))
+		# Check all-three-allies AFTER the loop so a single night that unlocks
+		# both nora + elias (rare but possible) still fires the achievement.
+		if bool(allies.get("nora", false)) and bool(allies.get("elias", false)) and bool(allies.get("victor", false)):
+			if not _ach_all_three:
+				_ach_all_three = true
+				_unlock_ach("all_three_allies")
+		# Achievement triggers tied to night-end (success only).
+		if night_index == 0 and not _ach_first_night:
+			_ach_first_night = true
+			_unlock_ach("first_night")
+		total_breaches += int(night_stats.get("breaches", 0))
+		if night_index + 1 >= night_count:
+			if not _ach_clear_all:
+				_ach_clear_all = true
+				_unlock_ach("clear_all_nights")
+			if total_breaches == 0 and not _ach_no_breach:
+				_ach_no_breach = true
+				_unlock_ach("no_breach")
 
 	# Pick report text from level data — uses the localized _en variant when
 	# the locale is en, otherwise the Chinese original.
@@ -2440,11 +3402,20 @@ func _show_night_report(success: bool, body: String) -> void:
 	last_report_body = body
 	_clear_card_layer()
 	card_layer.visible = true
+	# Night report uses the room background but the hotspot buttons are
+	# context for the night map only — keep them hidden so the stats panel
+	# is the focus.
+	hotspot_layer.visible = false
 	if success and art.get("report"):
 		bg.texture = art["report"]
 	elif not success and art.get("final_bad"):
 		bg.texture = art["final_bad"]
-	_play_music("final" if success else "final")
+	# Bug fix: was `_play_music("final" if success else "final")` — both
+	# branches played the chapter-complete track on every night end. Now the
+	# sting (success/failure) plays one-shot, and the looping `music_report`
+	# bed takes over once the sting ends (see _process/_pending_report_music).
+	_play_music("success" if success else "failure", false)
+	_pending_report_music = true
 
 	var level: Dictionary = NightShiftLevels.LEVELS[night_index]
 	var night_def: Dictionary = data.get_night(night_index)
@@ -2538,6 +3509,9 @@ func _show_final() -> void:
 	phase = "final"
 	_clear_card_layer()
 	card_layer.visible = true
+	# Same as night report — final screen is its own scene, hide the map
+	# hotspot buttons so the dawn illustration reads cleanly.
+	hotspot_layer.visible = false
 	if art.get("final_good"):
 		bg.texture = art["final_good"]
 	_play_music("final")
@@ -2599,6 +3573,8 @@ func _make_button(text: String, pos: Vector2, size: Vector2, callback: Callable)
 	sp.bg_color = Color(0.4, 0.48, 0.58, 0.95)
 	btn.add_theme_stylebox_override("pressed", sp)
 	btn.pressed.connect(callback)
+	if _dx_debug_probe_phase:
+		print("DEBUG _make_button created for: ", text, " callback: ", callback)
 	return btn
 
 
@@ -2607,6 +3583,17 @@ func _log(msg: String) -> void:
 	if logs.size() > 6:
 		logs.pop_front()
 	log_label.text = "\n".join(logs)
+
+
+func _unlock_ach(id: String) -> void:
+	# Thin facade so all 8 trigger sites have one place to call. Steamworks
+	# is registered as an autoload (project.godot:21); resolve via the
+	# scene-tree path so headless --script runs without an autoload also work.
+	var node: Node = get_node_or_null("/root/Steamworks")
+	if node == null:
+		node = Engine.get_singleton("Steamworks") if Engine.has_singleton("Steamworks") else null
+	if node and node.has_method("unlock_achievement"):
+		node.unlock_achievement(id)
 
 
 func _update_status_label() -> void:

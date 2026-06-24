@@ -8,7 +8,7 @@ const SAMPLE_RATE := 22050
 
 
 static func build_all() -> Dictionary:
-	return {
+	var sfx := {
 		"warning_beep": beep(720.0, 0.10, 0.18),
 		"breach_alarm": alarm(360.0, 480.0, 0.55, 0.55),
 		"repair_ding": beep(1180.0, 0.06, 0.12),
@@ -18,6 +18,30 @@ static func build_all() -> Dictionary:
 		"unlock": chord([660.0, 880.0], 0.18, 0.22),
 		"breath": breath(0.55),
 	}
+	# External SFX shipped as audio files — load via ResourceLoader when the
+	# file is present, otherwise fall back to a procedural clip so the game
+	# still plays something. Both must be AudioStream-compatible so the
+	# generic _play_sfx path can swap them in without branching.
+	sfx["footstep"] = _load_external_or(
+		"res://assets/audio/sfx_footstep.wav",
+		beep(180.0, 0.05, 0.12)
+	)
+	sfx["wood_plank_nail"] = _load_external_or(
+		"res://assets/audio/sfx_wood_plank_nail.wav",
+		beep(220.0, 0.04, 0.18)
+	)
+	return sfx
+
+
+# Load an external audio resource if present, otherwise return the fallback.
+# Returns AudioStream (not AudioStreamWAV) so .mp3 / .ogg files don't fail
+# the static type check. Runtime casting happens at the _play_sfx call site.
+static func _load_external_or(path: String, fallback: AudioStreamWAV) -> AudioStream:
+	if ResourceLoader.exists(path):
+		var res: Resource = load(path)
+		if res is AudioStream:
+			return res
+	return fallback
 
 
 # Short sine with quick attack/release envelope.

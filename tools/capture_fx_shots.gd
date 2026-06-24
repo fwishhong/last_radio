@@ -8,10 +8,8 @@ const OUTPUT_DIR := "user://last_radio_v2_fx_shots"
 
 
 func _initialize() -> void:
-	if DisplayServer.get_name() == "headless":
-		print("SKIP: needs display driver")
-		quit(0)
-		return
+	# SubViewport-based capture works in both headless and windowed mode,
+	# so we don't gate on DisplayServer.get_name() == "headless".
 	_run.call_deferred()
 
 
@@ -91,6 +89,25 @@ func _run() -> void:
 	for i in 90:
 		await process_frame
 	_take_shot(vp, game, "06_dawn_fade")
+
+	# Frame 7: world-layer parallax + outside-zombie sprites. Force the
+	# front_door + left_window into telegraph-imminent state so the sprites
+	# fade in at full alpha and the parallax background is visible.
+	game.fx_particles.clear()
+	game.fx_telegraphs.clear()
+	game.fx_dawn_target = 0.0
+	game.fx_static_alpha = 0.0
+	var FxRef := preload("res://scripts/NightShiftFx.gd")
+	FxRef.telegraph_schedule(game.fx_telegraphs, "front_door", 0.4, "assault")
+	FxRef.telegraph_schedule(game.fx_telegraphs, "left_window", 0.3, "assault")
+	# Force breach on back_door to show the multi-zombie breach sprite
+	var bd: Dictionary = game.hotspots["back_door"]
+	bd["assault"] = true
+	game.hotspots["back_door"] = bd
+	# Tick the game a few frames so the world-layer state machine catches up
+	for i in 8:
+		await process_frame
+	_take_shot(vp, game, "07_world_layer")
 
 	print("FX capture complete: %s" % ProjectSettings.globalize_path(OUTPUT_DIR))
 	quit(0)

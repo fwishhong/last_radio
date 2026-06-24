@@ -122,7 +122,7 @@
     {
       "id": "radio_booster",
       "type": "fortify",
-      "name": "架高天线",
+      "name": "校准电台",
       "body": "电台呼叫持续更久，也更容易接通。",
       "cost": {
         "parts": 1
@@ -135,10 +135,12 @@
         }
       ],
       "tags": [
-        "radio",
-        "antenna"
+        "radio"
       ],
-      "name_en": "Raise the Antenna",
+      "requires_unlocked": [
+        "radio"
+      ],
+      "name_en": "Tune the Radio",
       "body_en": "Radio calls last longer and connect more easily."
     },
     {
@@ -188,6 +190,9 @@
       "tags": [
         "antenna",
         "radio"
+      ],
+      "requires_unlocked": [
+        "antenna"
       ],
       "name_en": "Anchor Antenna",
       "body_en": "Antenna drops less. Calls are harder to lose."
@@ -362,6 +367,9 @@
         "back_door",
         "door"
       ],
+      "requires_unlocked": [
+        "back_door"
+      ],
       "name_en": "Bar Back Door",
       "body_en": "Back door holds longer."
     },
@@ -428,6 +436,9 @@
       "tags": [
         "medbay",
         "medicine"
+      ],
+      "requires_unlocked": [
+        "medbay"
       ],
       "name_en": "Medbay Lamp",
       "body_en": "Fewer medbay alerts. Slight trust gain."
@@ -547,6 +558,9 @@
         "victor",
         "storage"
       ],
+      "requires_unlocked": [
+        "storage"
+      ],
       "name_en": "Mark Supply Crate",
       "body_en": "Find parts at Victor's coordinates. Storage pressure lowers."
     },
@@ -571,6 +585,9 @@
         "antenna",
         "battery"
       ],
+      "requires_unlocked": [
+        "antenna"
+      ],
       "name_en": "Signal Battery",
       "body_en": "During blackout, antenna drops slower."
     },
@@ -591,6 +608,10 @@
         }
       ],
       "tags": [
+        "radio",
+        "antenna"
+      ],
+      "requires_unlocked": [
         "radio",
         "antenna"
       ],
