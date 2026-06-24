@@ -369,6 +369,12 @@ func _ready() -> void:
 	_load_data()
 	_load_assets()
 	_load_audio()
+	# Apply global audio mute (CLI override > settings.json > default).
+	# Runs before _build_ui() so MenuUI's first apply_settings sees the
+	# same muted state the rest of the game is already using; otherwise
+	# MenuUI could briefly unmute during the slot picker → settings
+	# transition. See Settings.get_audio_muted() for the default.
+	_apply_audio_mute()
 	_build_walk_frames()
 	_build_ui()
 	# Migrate any v2 single-slot save before deciding what to show.
@@ -533,6 +539,48 @@ func _play_sfx(name: String) -> void:
 		return
 	sfx_player.stream = sfx_streams[name]
 	sfx_player.play()
+
+
+# Apply the global audio mute flag to AudioServer.
+#
+# Priority (highest first):
+#   1. CLI --no-mute / --mute / --silent / --audio overrides settings
+#      for the current session without writing to user://settings.json.
+#   2. settings.json audio_muted (defaults to DEFAULT_AUDIO_MUTED=true
+#      on a fresh launch — first launch is silent so dev / debug runs
+#      don't accidentally bleed sound into a shared room).
+#   3. Hard default (true).
+#
+# This is called once from _ready() and again whenever MenuUI.apply_settings()
+# changes the checkbox state. Both paths use the same bus-mute API so
+# volume sliders and the mute checkbox are orthogonal.
+func _apply_audio_mute() -> void:
+	var muted: bool = Settings.get_audio_muted()
+	# CLI override (per-session only — never written to settings).
+	var cli_args: PackedStringArray = OS.get_cmdline_args()
+	for arg in cli_args:
+		# --no-mute / --audio / --sound force-unmute for this session.
+		if arg == "--no-mute" or arg == "--audio" or arg == "--sound":
+			muted = false
+			break
+		# --mute / --silent / --quiet force-mute for this session (CI /
+		# capture runs that want to record audio-free screenshots).
+		if arg == "--mute" or arg == "--silent" or arg == "--quiet":
+			muted = true
+			break
+	# Also check OS.get_cmdline_user_args() in case the platform splits
+	# user args from engine args (Godot 4 splits them on most platforms).
+	for arg in OS.get_cmdline_user_args():
+		if arg == "--no-mute" or arg == "--audio" or arg == "--sound":
+			muted = false
+			break
+		if arg == "--mute" or arg == "--silent" or arg == "--quiet":
+			muted = true
+			break
+	for bus in ["Music", "SFX"]:
+		var idx: int = AudioServer.get_bus_index(bus)
+		if idx >= 0:
+			AudioServer.set_bus_mute(idx, muted)
 
 
 # ============================================================================

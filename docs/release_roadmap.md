@@ -133,6 +133,7 @@
 | ② (Round 2) | player 立绘 + repair overlay 修复 + dawn-fade reset + procedural pacing (night 2-10 6-10s cadence) | 1d | ✅ `faef1a4` + `66064a5` | polish spec §4.5 |
 | ③ (Round 2.1) | hammer swing thrust 1.4→1.8 rad + handle 暖棕调 + night 5+ 节奏 4-7s | 0.5d | ✅ `3b1b7e3` | polish spec §4.5 |
 | ④ (M13) | art-based hammer (Sprite2D + AI PNG) 替换 procedural draw | 0.5d | ✅ `0f431f9` | polish spec §4.5 |
+| ⑤ (M11.5) | 启动默认静音 (Settings 默认 muted=true + CLI flag override) | 0.25d | ✅ (新 commit) | polish spec §6.2 |
 | M13.1 | player_repair_*.png 重做 3 帧 (image-to-image 让角色风格一致) + 接回 player_repair_token | 1d | 🔜 | polish spec §6.3 |
 | M11 | NPC AI 接进主循环 + 软锁定 + zombie 视觉强化 | 2d | 🔜 | polish spec §4 / §5 |
 | M12 | NPC sprite + 顶部状态条 | 1d | 🔜 | polish spec §4.3 / §4.4 / §5 |

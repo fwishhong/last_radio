@@ -5,6 +5,10 @@ extends RefCounted
 #   locale (zh / en)
 #   music_volume (0..1, default 0.8)
 #   sfx_volume   (0..1, default 1.0)
+#   audio_muted  (bool, default true) — global mute. Default is ON so dev /
+#                  debug sessions don't disturb anyone in the room; players
+#                  can flip it off in Settings → Audio. CLI --no-mute flag
+#                  overrides for one session without persisting.
 #   window_mode (windowed / borderless / fullscreen, default windowed)
 #   resolution  (string like "1280x720", default "1280x720")
 # All getters return the default if the key is missing or the file is corrupt,
@@ -19,6 +23,7 @@ const PATH := "user://settings.json"
 const DEFAULT_LOCALE := "zh"
 const DEFAULT_MUSIC_VOLUME := 0.8
 const DEFAULT_SFX_VOLUME := 1.0
+const DEFAULT_AUDIO_MUTED := true
 const DEFAULT_WINDOW_MODE := "windowed"
 const DEFAULT_RESOLUTION := "1280x720"
 
@@ -88,6 +93,24 @@ static func set_sfx_volume(v: float) -> void:
 	_save()
 
 
+# ---- audio mute (M11+) -------------------------------------------------
+#
+# Global mute flag. Default ON so a fresh launch / fresh save slot starts
+# silent — useful for dev / debug runs in shared rooms where sound bleeds
+# out and annoys people nearby. CLI flag `--no-mute` (and friends)
+# overrides per-session without writing to settings.
+
+static func get_audio_muted() -> bool:
+	_ensure_loaded()
+	return bool(_cache.get("audio_muted", DEFAULT_AUDIO_MUTED))
+
+
+static func set_audio_muted(v: bool) -> void:
+	_ensure_loaded()
+	_cache["audio_muted"] = v
+	_save()
+
+
 # ---- display ---------------------------------------------------------
 
 static func get_window_mode() -> String:
@@ -116,6 +139,7 @@ static func reset_all() -> void:
 		"locale": "",
 		"music_volume": DEFAULT_MUSIC_VOLUME,
 		"sfx_volume": DEFAULT_SFX_VOLUME,
+		"audio_muted": DEFAULT_AUDIO_MUTED,
 		"window_mode": DEFAULT_WINDOW_MODE,
 		"resolution": DEFAULT_RESOLUTION,
 	}

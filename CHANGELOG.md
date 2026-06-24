@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- M11.5: global audio mute. `Settings.DEFAULT_AUDIO_MUTED = true` so a
+  fresh launch starts muted — first launch / dev-debug runs no longer
+  bleed music + sfx into the room and disturb anyone nearby. Players
+  flip it off in Settings → Audio (new Mute checkbox). CLI override
+  flags `--no-mute` / `--mute` / `--silent` / `--quiet` / `--audio` /
+  `--sound` work per-session without persisting. `MenuUI._apply_audio`
+  extended with `_apply_audio_mute` using `AudioServer.set_bus_mute`;
+  `NightShiftGame._ready` runs it once before `_build_ui` so the slot
+  picker doesn't briefly unmute. New `tools/night_shift_audio_mute_test.gd`
+  — 17 assertions covering default / persistence / MenuUI checkbox /
+  AudioServer bus state / CLI flag name recognition.
 - M13: art-based hammer replaces the procedural round-2.1 draw. New
   `assets/final/night_shift/player_hammer_art.png` (1024×1024 RGBA,
   AI-generated via matrix MCP text-to-image + `tools/png_to_rgba.py`

@@ -40,6 +40,7 @@
   "settings_music_volume": "音乐音量",
   "settings_sfx_volume": "音效音量",
   "settings_fullscreen": "全屏",
+  "settings_mute": "静音",
   "settings_windowed": "窗口",
   "settings_resolution": "分辨率",
   "settings_reset": "恢复默认",

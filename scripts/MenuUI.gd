@@ -47,6 +47,7 @@ var _quit_panel: Panel
 # Settings widgets
 var _music_slider: HSlider
 var _sfx_slider: HSlider
+var _mute_check: CheckButton
 var _fullscreen_check: CheckButton
 var _lang_zh_button: Button
 var _lang_en_button: Button
@@ -122,6 +123,7 @@ func apply_settings() -> void:
 	_apply_locale()
 	SettingsRef.set_music_volume(_music_slider.value)
 	SettingsRef.set_sfx_volume(_sfx_slider.value)
+	SettingsRef.set_audio_muted(_mute_check.button_pressed)
 	SettingsRef.set_window_mode("fullscreen" if _fullscreen_check.button_pressed else "windowed")
 	SettingsRef.set_locale(I18nRef.locale)
 	_show_apply_status()
@@ -191,6 +193,15 @@ func _build() -> void:
 	_fullscreen_check.position = Vector2(40, 160)
 	_fullscreen_check.button_pressed = SettingsRef.get_window_mode() == "fullscreen"
 	_settings_panel.add_child(_fullscreen_check)
+
+	# Mute toggle. Default ON (per Settings.DEFAULT_AUDIO_MUTED) so the
+	# first launch and dev-debug runs don't accidentally spam sound into
+	# the room. Players flip this off in Settings if they want audio.
+	_mute_check = CheckButton.new()
+	_mute_check.text = I18nRef.t("settings_mute")
+	_mute_check.position = Vector2(280, 160)
+	_mute_check.button_pressed = SettingsRef.get_audio_muted()
+	_settings_panel.add_child(_mute_check)
 
 	# Language
 	_settings_panel.add_child(_make_body_label(I18nRef.t("settings_language"), Vector2(40, 210), 100))
@@ -348,6 +359,7 @@ func _on_reset_pressed() -> void:
 	SettingsRef.reset_all()
 	_music_slider.value = SettingsRef.get_music_volume()
 	_sfx_slider.value = SettingsRef.get_sfx_volume()
+	_mute_check.button_pressed = SettingsRef.get_audio_muted()
 	_fullscreen_check.button_pressed = SettingsRef.get_window_mode() == "fullscreen"
 	_apply_audio()
 	_apply_window_mode()
@@ -384,6 +396,19 @@ func _apply_audio() -> void:
 	var sfx_db := _volume_to_db(SettingsRef.get_sfx_volume())
 	_set_bus_volume_db("Music", music_db)
 	_set_bus_volume_db("SFX", sfx_db)
+	# Global mute is a separate axis from volume: it overrides the bus
+	# volume entirely. AudioServer.set_bus_mute bypasses the volume_db
+	# calculation so a "muted" state is exact silence even when the
+	# user has volume at 100%.
+	_apply_audio_mute()
+
+
+func _apply_audio_mute() -> void:
+	var muted := SettingsRef.get_audio_muted()
+	for bus in ["Music", "SFX"]:
+		var idx := AudioServer.get_bus_index(bus)
+		if idx >= 0:
+			AudioServer.set_bus_mute(idx, muted)
 
 
 func _apply_window_mode() -> void:
