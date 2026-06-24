@@ -146,6 +146,53 @@ func _run() -> void:
 		print("  FAIL: game.hammer_sprite is null -- round-2 hammer not wired in")
 		fail += 1
 
+	# --- (8): night 5+ (night_index >= 4) base cadence is 4-7s --------
+	# round-2.1 pacing: night 1-4 keep 6-10s, night 5+ switch to 4-7s
+	# base. The intra-night ramp on top of the base can shave another
+	# 1.5/2.0s, so the floored jittered next-warning should land within
+	# 2.0-7.0s of the last fire. We drive the scheduler deterministically:
+	# reset _proc_next_warning_at, force a fire, then read the next
+	# _proc_next_warning_at vs night_elapsed.
+	game.night_index = 4
+	game.night_duration = 120.0
+	game.night_elapsed = 0.0
+	game._proc_next_warning_at = -1.0
+	game.call("_show_night")
+	for i in 2:
+		await process_frame
+	# First tick just initializes the schedule to night_elapsed + 8s.
+	game.call("_proc_tick_background_warnings", 0.0)
+	# Force a fire by jumping past the schedule, then re-tick.
+	game.night_elapsed = game._proc_next_warning_at + 0.1
+	game.call("_proc_tick_background_warnings", 0.0)
+	# At night_elapsed=~8.1, night_duration=120, ramp=0.067. With
+	# late base (4-7) and ramp (-1.5/-2.0): min_gap=3.9, max_gap=6.87.
+	# After the floor (>=2.0), the next warning lands 2.0-6.87s out.
+	var next_in: float = game._proc_next_warning_at - game.night_elapsed
+	if next_in >= 2.0 and next_in <= 7.0:
+		print("  ok: night 5+ base cadence is 4-7s (next in %.2fs at night_elapsed=%.1fs)" % [next_in, game.night_elapsed])
+	else:
+		print("  FAIL: night 5+ cadence out of 2-7s range (next in %.2fs, expected 2.0-7.0)" % next_in)
+		fail += 1
+	# Cross-check: night 2 (index=1) at the same night_elapsed should
+	# still be on the 6-10s base, i.e. next_in >= 5.0s. This is the
+	# regression guard that night 5+ actually fires the new base.
+	game.night_index = 1
+	game._proc_next_warning_at = -1.0
+	game.night_elapsed = 0.0
+	game.call("_show_night")
+	for i in 2:
+		await process_frame
+	game.call("_proc_tick_background_warnings", 0.0)
+	game.night_elapsed = game._proc_next_warning_at + 0.1
+	game.call("_proc_tick_background_warnings", 0.0)
+	var next_in_early: float = game._proc_next_warning_at - game.night_elapsed
+	if next_in_early >= 5.0 and next_in_early <= 10.0:
+		print("  ok: night 2 base cadence still 6-10s (next in %.2fs)" % next_in_early)
+	else:
+		print("  FAIL: night 2 cadence regression (next in %.2fs, expected 5.0-10.0)" % next_in_early)
+		fail += 1
+
 	var status: String
 	if fail == 0:
 		status = "PASS"

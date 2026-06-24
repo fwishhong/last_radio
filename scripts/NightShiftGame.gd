@@ -302,8 +302,20 @@ const DAWN_FADE_DURATION := 1.5
 # round-2 pacing fix: night 2-10 used to have only 2-3 fixed events
 # per 120-180s night, leaving the player with 40-90s of dead air.
 var _proc_next_warning_at: float = -1.0
+# Default (night 1-4) base cadence for procedural background warnings.
+# _proc_tick_background_warnings switches to a tighter 4-7s base from
+# night 5 onward so the late-game pressure keeps ramping; the per-night
+# ramp on top of the base still subtracts 1.5s/2.0s from min/max as
+# night_elapsed approaches night_duration.
 const PROC_WARNING_INTERVAL_MIN := 6.0
 const PROC_WARNING_INTERVAL_MAX := 10.0
+# Late-night (night 5+) tighter base cadence. Picked to keep the
+# player within one teleport of needing to run for the entire late
+# game; night-end ramp pushes the cadence down to ~2.5-5s.
+const PROC_WARNING_LATE_MIN := 4.0
+const PROC_WARNING_LATE_MAX := 7.0
+# First night (0-based) where the late-game cadence kicks in.
+const PROC_WARNING_LATE_NIGHT := 4
 const PROC_HOTSPOT_COOLDOWN := 25.0
 
 # Footstep dust: small puffs kicked up at the player's feet every
@@ -3043,9 +3055,25 @@ func _proc_tick_background_warnings(delta: float) -> void:
 	# Schedule the next warning 6-10s out, jittered so the cadence
 	# doesn't feel mechanical. Slightly tighter cadence as the night
 	# wears on so the late-game pressure keeps ramping.
+	# round-2.1: base cadence switches from 6-10s (night 1-4) to
+	# 4-7s (night 5+) so the late-game pressure never lets the
+	# player stand still. The intra-night ramp on top of the base
+	# still subtracts 1.5/2.0s as the night progresses.
+	var base_min: float
+	var base_max: float
+	if night_index >= PROC_WARNING_LATE_NIGHT:
+		base_min = PROC_WARNING_LATE_MIN
+		base_max = PROC_WARNING_LATE_MAX
+	else:
+		base_min = PROC_WARNING_INTERVAL_MIN
+		base_max = PROC_WARNING_INTERVAL_MAX
 	var ramp: float = clamp(night_elapsed / max(1.0, night_duration), 0.0, 1.0)
-	var min_gap: float = PROC_WARNING_INTERVAL_MIN - 1.5 * ramp
-	var max_gap: float = PROC_WARNING_INTERVAL_MAX - 2.0 * ramp
+	var min_gap: float = base_min - 1.5 * ramp
+	var max_gap: float = base_max - 2.0 * ramp
+	# Floor at 2.0s on the jittered max so we never spawn two
+	# warnings back-to-back even at full late-night ramp.
+	min_gap = max(2.0, min_gap)
+	max_gap = max(min_gap + 0.5, max_gap)
 	_proc_next_warning_at = night_elapsed + min_gap + randf() * (max_gap - min_gap)
 
 
@@ -3214,20 +3242,23 @@ func _draw_player() -> void:
 			hammer_sprite.position = player_pos + Vector2(22.0, -54.0)
 			var phase: float = fmod(player_repair_timer, PlayerRepairFx.REPAIR_CYCLE_SEC) / PlayerRepairFx.REPAIR_CYCLE_SEC
 			# Two-segment swing: phase 0.0..0.45 -> swing DOWN (hammer
-			# arcs from -PI/3 back to -PI/6+1.4, max forward thrust near
+			# arcs from -PI/3 back to -PI/6+1.8, max forward thrust near
 			# phase=0.5); phase 0.45..1.0 -> swing BACK (returns to
-			# -PI/3 ready position). The swing amplitude is large (1.4
-			# rad = ~80deg) so the hammer motion reads as a clear,
+			# -PI/3 ready position). The swing amplitude is large (1.8
+			# rad = ~103deg) so the hammer motion reads as a committed,
 			# energetic hammer-strike even at 1280x720. round-2 visual
 			# fix per user feedback: "哪怕边上加上锤子挥动的动画呢".
+			# round-2.1 tweak: over-arm thrust bumped 1.4 -> 1.8 rad
+			# (~23deg more forward) so the strike carries more weight
+			# and the recovery arc is visibly longer / less jerky.
 			var swing: float
 			if phase < 0.45:
-				# Forward swing: -PI/3 (60deg up) -> -PI/6 + 1.4 (over-arm thrust)
-				swing = -PI / 3.0 + (phase / 0.45) * (PI / 6.0 + 1.4)
+				# Forward swing: -PI/3 (60deg up) -> -PI/6 + 1.8 (over-arm thrust)
+				swing = -PI / 3.0 + (phase / 0.45) * (PI / 6.0 + 1.8)
 			else:
 				# Recovery swing: back to -PI/3 over the remaining 0.55 phase
 				var recover_t: float = (phase - 0.45) / 0.55
-				swing = (-PI / 6.0 + 1.4) - recover_t * (PI / 3.0 + PI / 6.0 + 1.4)
+				swing = (-PI / 6.0 + 1.8) - recover_t * (PI / 3.0 + PI / 6.0 + 1.8)
 			hammer_sprite.rotation = swing
 			# Force a redraw -- Node2D's _draw caches its output across
 			# frames if no top-level transform component changed (we only

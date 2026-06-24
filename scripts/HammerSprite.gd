@@ -16,8 +16,14 @@ extends Node2D
 
 const HEAD_COLOR := Color(0.62, 0.62, 0.66)
 const HEAD_EDGE := Color(0.34, 0.34, 0.38)
-const HANDLE_COLOR := Color(0.42, 0.28, 0.18)
-const HANDLE_EDGE := Color(0.22, 0.14, 0.08)
+# round-2.1: handle color brightened + saturated for a more obvious
+# tool silhouette. Previous (0.42, 0.28, 0.18) was muddy dark-walnut
+# that read as "shadow strip" against the dark room. New (0.68, 0.40,
+# 0.18) is a clear warm-cedar / varnished-oak that pops against the
+# player silhouette and matches the brown palette of the radio
+# cabinet / medbay crate props.
+const HANDLE_COLOR := Color(0.68, 0.40, 0.18)
+const HANDLE_EDGE := Color(0.36, 0.20, 0.08)
 
 # Local-space geometry (hammer points "up" at rotation = 0).
 # The hand grips the bottom of the handle, head is at the top.

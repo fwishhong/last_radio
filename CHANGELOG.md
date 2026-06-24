@@ -57,6 +57,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   state tracking.
 
 ### Fixed
+- Round 2.1: hammer swing over-arm thrust 1.4 → 1.8 rad (~103° max forward
+  swing, vs ~80° previously) so the strike carries visibly more weight and
+  the recovery arc reads longer. Hammer `HANDLE_COLOR` brightened from
+  muddy dark-walnut (0.42, 0.28, 0.18) to warm cedar (0.68, 0.40, 0.18)
+  so the tool silhouette pops against the dark room. Round 2.1 capture:
+  `tools/capture_round2_1_fixes.gd` → 10 PNGs in
+  `user://last_radio_v2_round2_1_capture/`.
+- Round 2.1: procedural background-warning pacing — base cadence switches
+  from 6-10s (night 1-4) to 4-7s (night 5+) so the late-game pressure
+  never lets the player stand still. Per-night ramp on top of the base
+  still subtracts 1.5/2.0s as `night_elapsed` approaches `night_duration`,
+  floored at 2.0s on the jittered max so we never spawn back-to-back
+  warnings even at full late-night ramp. `round2_pacing_test` gained two
+  assertions: night 5+ next-warning lands in 2.0-7.0s, night 2 stays in
+  5.0-10.0s (regression guard). 7/7 round-2.1 pacing assertions pass;
+  20/20 headless test suites green (~700 assertions).
 - `night_shift_full_flow_test` step 16 (`_show_cover_with_continue`) — added
   the missing `_show_cover_with_continue()` + `_on_continue_pressed()` to
   NightShiftGame, all 18 test suites pass (593 assertions).
