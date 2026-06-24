@@ -5,7 +5,7 @@
       "id": "start",
       "type": "setup",
       "name": "开始守夜",
-      "body": "不做额外准备，直接进入今晚。",
+      "body": "我也懒得再折腾了。把门窗检查一遍，就这样进今晚吧。",
       "cost": {},
       "gain": {},
       "effects": [],
@@ -13,13 +13,13 @@
         "tutorial"
       ],
       "name_en": "Begin Watch",
-      "body_en": "No extra preparation. Go straight into the night."
+      "body_en": "I'm too tired to fuss. One last check on the doors and windows, then we take tonight as it comes."
     },
     {
       "id": "door_reinforce",
       "type": "fortify",
       "name": "加固正门",
-      "body": "正门更耐撞，破防前多撑一会儿。",
+      "body": "正门在夜风里吱呀了一整晚。这块木板我多盯一眼吧。破门之前多争几秒，Nora 也好喘口气。",
       "cost": {
         "planks": 1
       },
@@ -41,13 +41,13 @@
         "front_door"
       ],
       "name_en": "Reinforce Front Door",
-      "body_en": "Front door holds longer before breaking."
+      "body_en": "That front door has been groaning all night. One more plank here buys us a few extra seconds before it gives. Nora can use the breath."
     },
     {
       "id": "window_brace",
       "type": "fortify",
       "name": "补窗板",
-      "body": "左右窗更结实，Nora 修窗更快。",
+      "body": "两边的窗板都薄了，今晚让它们再硬一点。Nora 一旦上手也会快些。",
       "cost": {
         "planks": 1
       },
@@ -68,13 +68,13 @@
         "nora"
       ],
       "name_en": "Brace Windows",
-      "body_en": "Left and right windows get sturdier. Nora repairs them faster."
+      "body_en": "Both window boards are getting thin. A little extra bracing tonight, and Nora will move faster once she starts patching."
     },
     {
       "id": "battery_buffer",
       "type": "fortify",
       "name": "接备用电瓶",
-      "body": "发电机更不容易掉到底并断电。",
+      "body": "发电机断电一次就够我手忙脚乱的。先把备用电瓶接上，宁可它今天用不上。",
       "cost": {
         "battery": 1
       },
@@ -90,13 +90,13 @@
         "power"
       ],
       "name_en": "Backup Battery",
-      "body_en": "Generator is less likely to fully drain and lose power."
+      "body_en": "One full blackout is enough to scramble me for an hour. Hook up the spare battery now, even if tonight never needs it."
     },
     {
       "id": "generator_tune",
       "type": "fortify",
       "name": "检修发电机",
-      "body": "发电机掉电更慢，停电后更容易拉回。",
+      "body": "发电机听起来已经开始喘了。趁着白天还有点时间，把火花塞和滤芯顺手清一下。",
       "cost": {
         "parts": 1
       },
@@ -117,13 +117,13 @@
         "power"
       ],
       "name_en": "Service Generator",
-      "body_en": "Generator drains slower. Easier to recover from a blackout."
+      "body_en": "The generator is already starting to wheeze. I'll clean the plugs and the filter while the daylight's still on us."
     },
     {
       "id": "radio_booster",
       "type": "fortify",
       "name": "校准电台",
-      "body": "电台呼叫持续更久，也更容易接通。",
+      "body": "校一下电台，今晚的声音断断续续太久了。哪怕只多稳住半句也是好的。",
       "cost": {
         "parts": 1
       },
@@ -141,13 +141,13 @@
         "radio"
       ],
       "name_en": "Tune the Radio",
-      "body_en": "Radio calls last longer and connect more easily."
+      "body_en": "The radio keeps dropping mid-sentence. I'll recalibrate it tonight, even half a sentence longer counts out here."
     },
     {
       "id": "workbench",
       "type": "fortify",
       "name": "整理工具台",
-      "body": "值班员修理和操作速度小幅提高。",
+      "body": "工具乱成一团，谁找都慢半拍。我把它们顺手归位，修起来能快不少。",
       "cost": {
         "parts": 1
       },
@@ -164,13 +164,13 @@
         "repair"
       ],
       "name_en": "Tidy Workbench",
-      "body_en": "Slight boost to repair and operation speed."
+      "body_en": "Tools everywhere, everyone's fumbling. I'll sort the bench out now; everything's a bit faster after that."
     },
     {
       "id": "antenna_anchor",
       "type": "fortify",
       "name": "固定天线",
-      "body": "天线掉线更慢，呼叫更不容易丢。",
+      "body": "天线动不动就掉线，让人心里没底。再绑两圈，今晚的通话别断在要紧的地方。",
       "cost": {
         "parts": 1
       },
@@ -195,13 +195,13 @@
         "antenna"
       ],
       "name_en": "Anchor Antenna",
-      "body_en": "Antenna drops less. Calls are harder to lose."
+      "body_en": "The antenna keeps losing signal at the worst moments. I'll lash it down a couple more turns; tonight's calls can't drop where it matters."
     },
     {
       "id": "storage",
       "type": "fortify",
       "name": "整理储物间",
-      "body": "多找出一批木板，应急封堵更久。",
+      "body": "储物间翻一翻，总能多找出几块板子。应急时能多撑一会儿。",
       "cost": {},
       "gain": {
         "planks": 1
@@ -221,13 +221,13 @@
         "planks"
       ],
       "name_en": "Organize Storage",
-      "body_en": "Find extra planks. Emergency repairs last longer."
+      "body_en": "I dig through storage and pull out a few spare planks. An extra patch when we really need one is worth the mess."
     },
     {
       "id": "medbay",
       "type": "fortify",
       "name": "设医务角",
-      "body": "消耗药品，换来避难者信任和同伴稳定。",
+      "body": "用掉一点药品，但难民那边稳一稳。值得。",
       "cost": {
         "medicine": 1
       },
@@ -245,13 +245,13 @@
         "trust"
       ],
       "name_en": "Set up Medbay",
-      "body_en": "Spend medicine. Refugee trust and ally stability."
+      "body_en": "It costs medicine, but it steadies the refugees a little. Worth it."
     },
     {
       "id": "rescue_bleachers",
       "type": "rescue",
       "name": "搜救看台",
-      "body": "救回躲在看台的人，但会消耗药品并提高暴露。",
+      "body": "看台上还有人在躲着。我多走一趟，把人带回来。药品是消耗了，暴露度也得提。",
       "cost": {
         "medicine": 1
       },
@@ -271,13 +271,13 @@
         "noise"
       ],
       "name_en": "Rescue Bleachers",
-      "body_en": "Save people hiding in the bleachers. Uses medicine and raises exposure."
+      "body_en": "There are still people hiding in the bleachers. I'll make the run and bring them in. Costs medicine, and exposure climbs."
     },
     {
       "id": "storage_sweep",
       "type": "scavenge",
       "name": "搜器材柜",
-      "body": "获得木板和零件，但 Nora 夜里会更疲惫。",
+      "body": "再扫一遍器材室，能用的木板和零件都打包。今晚 Nora 会累一些，但她不会介意。",
       "cost": {},
       "gain": {
         "planks": 2,
@@ -296,13 +296,13 @@
         "nora"
       ],
       "name_en": "Scavenge Equipment",
-      "body_en": "Gain planks and parts. Nora tires more easily tonight."
+      "body_en": "I sweep the equipment room again, pack up every usable plank and part. Nora will be more tired tonight, but she won't mind."
     },
     {
       "id": "open_route",
       "type": "broadcast",
       "name": "公开路线",
-      "body": "广播坐标以换取回应，但暴露度上升。",
+      "body": "把坐标抛出去，外头也许有人能回应。代价是今晚我们更显眼一点。",
       "cost": {
         "battery": 1
       },
@@ -322,13 +322,13 @@
         "victor"
       ],
       "name_en": "Publish Route",
-      "body_en": "Broadcast the coordinates for response, but exposure rises."
+      "body_en": "I'll broadcast the coordinates. Someone out there might answer. The cost is we stay visible a bit longer tonight."
     },
     {
       "id": "keep_silent",
       "type": "broadcast",
       "name": "保持沉默",
-      "body": "降低暴露度，但可能错过外部回应。",
+      "body": "今晚我不发任何信号。少一些动静，少一些被注意。外面听不到回应，我认。",
       "cost": {},
       "gain": {
         "exposure": -1
@@ -344,13 +344,13 @@
         "quiet"
       ],
       "name_en": "Stay Silent",
-      "body_en": "Lower exposure, but might miss outside responses."
+      "body_en": "No signal from us tonight. Less noise, less attention. If no one answers from outside, that's the trade I take."
     },
     {
       "id": "back_door_bar",
       "type": "fortify",
       "name": "横闩后门",
-      "body": "后门更耐撞。",
+      "body": "后门最近没什么动静，但不能当真。给它加一道杠，今晚我心里踏实一点。",
       "cost": {
         "planks": 1,
         "parts": 1
@@ -371,13 +371,13 @@
         "back_door"
       ],
       "name_en": "Bar Back Door",
-      "body_en": "Back door holds longer."
+      "body_en": "The back door has been quiet, but quiet isn't safe. One more bar there and I can stop listening for it every few minutes."
     },
     {
       "id": "generator_cage",
       "type": "fortify",
       "name": "围住发电机",
-      "body": "后门告急时，发电机掉压少一点。",
+      "body": "把发电机围起来。后门一旦告急，它的压力也别跟着崩。",
       "cost": {
         "parts": 1
       },
@@ -393,13 +393,13 @@
         "back_door"
       ],
       "name_en": "Cage Generator",
-      "body_en": "When the back door is in trouble, generator loses less."
+      "body_en": "I cage the generator. When the back door starts giving way, at least the power won't go with it."
     },
     {
       "id": "runner_path",
       "type": "fortify",
       "name": "清出通道",
-      "body": "主角移动速度提高。",
+      "body": "我和队员之间那些绕路的杂物，今晚先清掉。下一次跑过去能省一两秒。",
       "cost": {},
       "gain": {},
       "effects": [
@@ -413,13 +413,13 @@
         "movement"
       ],
       "name_en": "Clear Path",
-      "body_en": "Player movement speed increases."
+      "body_en": "I clear the junk between me and the crew. A second or two saved each run, over a whole night, adds up."
     },
     {
       "id": "medbay_lamp",
       "type": "fortify",
       "name": "接医务灯",
-      "body": "医务角告急更少，信任小幅提高。",
+      "body": "医务角太暗了。今晚把灯挂稳一点，那边的告警会少一些。",
       "cost": {
         "battery": 1
       },
@@ -441,13 +441,13 @@
         "medbay"
       ],
       "name_en": "Medbay Lamp",
-      "body_en": "Fewer medbay alerts. Slight trust gain."
+      "body_en": "Medbay's been too dim. I hang the lamp steady tonight; fewer alerts coming from that corner."
     },
     {
       "id": "nora_kit",
       "type": "fortify",
       "name": "整理药箱",
-      "body": "Nora 处理医务和窗户更快。",
+      "body": "把药箱里的东西按用途排好。Nora 找东西不浪费时间了，她和窗户都能快一点。",
       "cost": {
         "medicine": 1
       },
@@ -463,13 +463,13 @@
         "medbay"
       ],
       "name_en": "Organize Medkit",
-      "body_en": "Nora handles medbay and windows faster."
+      "body_en": "I sort the kit by use. Nora doesn't waste time hunting for things, and the windows move faster with her."
     },
     {
       "id": "quiet_hours",
       "type": "setup",
       "name": "安排静默",
-      "body": "前半夜随机噪声减少，暴露度下降。",
+      "body": "前半夜我让队员压低动静。外面听不见我们，暴露度自然会慢慢降下来。",
       "cost": {},
       "gain": {
         "exposure": -1
@@ -485,13 +485,13 @@
         "exposure"
       ],
       "name_en": "Quiet Hours",
-      "body_en": "First half of the night: less random noise, lower exposure."
+      "body_en": "First half of the night, I keep the crew quiet. Less for the outside to hear, and exposure drifts down on its own."
     },
     {
       "id": "salvage_planks",
       "type": "scavenge",
       "name": "拆看台木板",
-      "body": "获得大量木板，但消耗信任并提高暴露。",
+      "body": "看台拆下来那些板子，今晚能让我撑过去。但信任会花一点，暴露度也会涨。",
       "cost": {
         "trust": 1
       },
@@ -511,13 +511,13 @@
         "exposure"
       ],
       "name_en": "Salvage Bleacher Planks",
-      "body_en": "Lots of planks, but spend trust and raise exposure."
+      "body_en": "The bleachers have planks I can use tonight. It costs trust and exposure goes up, but we won't run out of boards."
     },
     {
       "id": "double_brace",
       "type": "fortify",
       "name": "双层窗撑",
-      "body": "窗口的临时封堵更久。",
+      "body": "窗板再加一层。临阵封堵的时候能多顶几下，不至于一撞就裂。",
       "cost": {
         "planks": 1
       },
@@ -534,13 +534,13 @@
         "planks"
       ],
       "name_en": "Double Window Brace",
-      "body_en": "Window emergency seals last longer."
+      "body_en": "I double up the window boards. When an emergency patch has to hold, it won't crack on the first hit."
     },
     {
       "id": "victor_cache",
       "type": "scavenge",
       "name": "标记物资箱",
-      "body": "按 Victor 的坐标找到零件，仓库压力降低。",
+      "body": "Victor 给过的那个坐标，今晚派人过去翻一翻。零件拿回来，储物这边能松口气。",
       "cost": {
         "battery": 1
       },
@@ -562,13 +562,13 @@
         "storage"
       ],
       "name_en": "Mark Supply Crate",
-      "body_en": "Find parts at Victor's coordinates. Storage pressure lowers."
+      "body_en": "I send someone over to Victor's coordinates tonight. Whatever parts they bring back take some weight off storage."
     },
     {
       "id": "signal_battery",
       "type": "fortify",
       "name": "信号电瓶",
-      "body": "停电时天线掉线速度降低。",
+      "body": "再接一块电瓶给天线备用。万一断电，电台信号不会马上垮掉。",
       "cost": {
         "battery": 1,
         "parts": 1
@@ -589,13 +589,13 @@
         "antenna"
       ],
       "name_en": "Signal Battery",
-      "body_en": "During blackout, antenna drops slower."
+      "body_en": "I tie a second battery to the antenna. If the power drops, the signal won't fall with it."
     },
     {
       "id": "cable_route",
       "type": "fortify",
       "name": "重走线缆",
-      "body": "天线和电台修复更快。",
+      "body": "天线和电台之间的线缆太绕了。换一根直的，修复能快很多。",
       "cost": {
         "parts": 2
       },
@@ -616,13 +616,13 @@
         "antenna"
       ],
       "name_en": "Re-route Cables",
-      "body_en": "Antenna and radio repair faster."
+      "body_en": "The cables between antenna and radio are a mess. I reroute them straight; repairs go much faster."
     },
     {
       "id": "elias_tools",
       "type": "fortify",
       "name": "给 Elias 工具",
-      "body": "Elias 自动处理电台和天线更快。",
+      "body": "把工具递给 Elias。他一个人就能把电台和天线接得很快。",
       "cost": {
         "parts": 1
       },
@@ -639,13 +639,13 @@
         "antenna"
       ],
       "name_en": "Tools for Elias",
-      "body_en": "Elias auto-handles radio and antenna faster."
+      "body_en": "I hand Elias the kit. He'll handle radio and antenna on his own, and a lot faster."
     },
     {
       "id": "final_barricade",
       "type": "fortify",
       "name": "最后路障",
-      "body": "所有门窗初始更稳。",
+      "body": "今夜要把所有门窗再加固一次。两块木板都不心疼，能撑过今晚就行。",
       "cost": {
         "planks": 2,
         "parts": 1
@@ -663,13 +663,13 @@
         "barrier"
       ],
       "name_en": "Final Barricade",
-      "body_en": "All doors and windows start sturdier."
+      "body_en": "I brace every door and window one more time tonight. Two planks is nothing if it gets us through."
     },
     {
       "id": "all_hands",
       "type": "setup",
       "name": "全员分工",
-      "body": "Nora 和 Elias 自动处理速度提高。",
+      "body": "Nora 和 Elias 我让他们今晚别轮休。累了再说，先守住今晚。",
       "cost": {},
       "gain": {},
       "effects": [
@@ -688,13 +688,13 @@
         "elias"
       ],
       "name_en": "All Hands",
-      "body_en": "Nora and Elias auto-handle things faster."
+      "body_en": "Nora and Elias stay on tonight; no rotations. Tired is tomorrow's problem; tonight we hold."
     },
     {
       "id": "radio_beacon",
       "type": "broadcast",
       "name": "开信标",
-      "body": "最终夜电台呼叫窗口更长，但暴露度大幅上升。",
+      "body": "最后一夜我把信标打开。窗口会长一些，但外面所有眼睛也会盯过来。",
       "cost": {
         "battery": 1
       },
@@ -713,7 +713,7 @@
         "exposure"
       ],
       "name_en": "Open Beacon",
-      "body_en": "Final night radio window is longer, but exposure spikes."
+      "body_en": "Final night, I open the beacon. The window gets longer, but every eye out there will look this way."
     }
   ]
 }

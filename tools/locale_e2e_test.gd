@@ -77,13 +77,23 @@ func _run() -> void:
 	I18n.locale = "en"
 	_assert(I18n.t_field(data.get_resource("battery"), "name") == "Battery", "en battery name")
 
-	# 5) Day card body localizes
+	# 5) Day card body localizes. M14 (2026-06-25) rewrote the v0.5 short
+	#    third-person descriptions ("Front door holds longer before
+	#    breaking.") into first-person narrator monologues, so the
+	#    golden strings here are the M14 versions.
 	var card: Dictionary = data.get_card("door_reinforce")
 	I18n.locale = "zh"
 	_assert(I18n.t_field(card, "name") == "加固正门", "zh door_reinforce name")
+	_assert(
+		I18n.t_field(card, "body") == "正门在夜风里吱呀了一整晚。这块木板我多盯一眼吧。破门之前多争几秒，Nora 也好喘口气。",
+		"zh door_reinforce body (M14 monologue)"
+	)
 	I18n.locale = "en"
 	_assert(I18n.t_field(card, "name") == "Reinforce Front Door", "en door_reinforce name")
-	_assert(I18n.t_field(card, "body") == "Front door holds longer before breaking.", "en door_reinforce body")
+	_assert(
+		I18n.t_field(card, "body") == "That front door has been groaning all night. One more plank here buys us a few extra seconds before it gives. Nora can use the breath.",
+		"en door_reinforce body (M14 monologue)"
+	)
 
 	# 6) Game scene loads and reflects locale
 	# We don't drive inputs here — we just verify that the cover screen

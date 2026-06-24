@@ -135,6 +135,7 @@
 | ④ (M13) | art-based hammer (Sprite2D + AI PNG) 替换 procedural draw | 0.5d | ✅ `0f431f9` | polish spec §4.5 |
 | ⑤ (M11.5) | 启动默认静音 (Settings 默认 muted=true + CLI flag override) | 0.25d | ✅ (新 commit) | polish spec §6.2 |
 | M13.1 | player_repair_*.png 重做 3 帧 (image-to-image 让角色风格一致) + 接回 player_repair_token | 1d | ✅ (新 commit) | polish spec §6.3 |
+| M14 | 25 张 day card body 独白化 (zh 先) | 1d | ✅ (新 commit) | polish spec §6.3 |
 | M11 | NPC AI 接进主循环 + 软锁定 + zombie 视觉强化 | 2d | 🔜 | polish spec §4 / §5 |
 | M12 | NPC sprite + 顶部状态条 | 1d | 🔜 | polish spec §4.3 / §4.4 / §5 |
 | M13 | Cover / Tutorial Step 4 / Night Report 日志化 | 2d | 🔜 | polish spec §6 |
