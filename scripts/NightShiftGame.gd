@@ -3260,12 +3260,10 @@ func _draw_player() -> void:
 				var recover_t: float = (phase - 0.45) / 0.55
 				swing = (-PI / 6.0 + 1.8) - recover_t * (PI / 3.0 + PI / 6.0 + 1.8)
 			hammer_sprite.rotation = swing
-			# Force a redraw -- Node2D's _draw caches its output across
-			# frames if no top-level transform component changed (we only
-			# tweak rotation, which on some Godot builds is treated as a
-			# no-op for the redraw queue). queue_redraw() guarantees the
-			# next render pass picks up the new rotation.
-			hammer_sprite.queue_redraw()
+			# M13 art-based hammer is a Sprite2D -- it redraws automatically
+			# when rotation changes (no queue_redraw needed). The previous
+			# procedural Node2D + _draw version needed the explicit
+			# queue_redraw() to bypass the draw-cache.
 		else:
 			hammer_sprite.visible = false
 			hammer_sprite.rotation = 0.0
