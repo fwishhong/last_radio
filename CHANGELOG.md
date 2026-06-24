@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- M13: art-based hammer replaces the procedural round-2.1 draw. New
+  `assets/final/night_shift/player_hammer_art.png` (1024×1024 RGBA,
+  AI-generated via matrix MCP text-to-image + `tools/png_to_rgba.py`
+  v3 near-gray-key pass to recover true alpha on the matrix checker
+  placeholder). `scripts/HammerSprite.gd` migrated from `Node2D + _draw`
+  to `Sprite2D` with `centered=true`, `offset=(-302.9, 343.0)` (so
+  rotation pivots at the handle grip — matches procedural semantics)
+  and `scale=(1/16, 1/16)` for ~64 px wide hammer. `NightShiftGame`'s
+  redundant `hammer_sprite.queue_redraw()` removed (Sprite2D auto-redraws
+  on rotation change). New `tools/capture_m13_hammer.gd` —
+  9 swing-phase captures in `user://last_radio_v2_m13_capture/`
+  confirming the warm-cedar handle + steel head + clean transparent
+  background all read at 1280×720. 20/20 headless test suites still
+  green (~700 assertions); round-2.1 swing math (-60° start → +73°
+  peak → -67° recovery) is unchanged — only the renderer swapped.
 - feat(steam): wire 8 achievement triggers (first_night, first_contact, recruit_nora, recruit_elias, all_three_allies, reach_victor, clear_all_nights, no_breach); drop hard_clear and ng_plus_one (out of chapter-1 scope)
 - test: tools/achievement_trigger_test.gd
 - M9: `export_presets.cfg` with Windows / macOS / Linux desktop targets
