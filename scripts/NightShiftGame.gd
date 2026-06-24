@@ -739,7 +739,12 @@ func _build_ui() -> void:
 	# toggles visible + texture while repair ticks are firing.
 	player_repair_token = Sprite2D.new()
 	player_repair_token.position = player_pos
-	player_repair_token.scale = Vector2(1.0, 1.0)
+	# Art frames are 896x1200 source; scale 0.12 brings the body to ~144px tall
+	# which matches the walk sprite footprint (~120-160px) so the player
+	# doesn't visually pop on idle->repair transitions. polish spec §4.5
+	# (M13.1: replaces the v0.5 drop-overlay tint with real art frames; the
+	# earlier scale=1.0 was correct only for tiny 32x32 debug squares).
+	player_repair_token.scale = Vector2(0.12, 0.12)
 	player_repair_token.visible = false
 	player_repair_token.z_index = 1  # above walk sprite
 	player_repair_token.texture = player_repair_textures.get(PlayerRepairFx.REPAIR_FRAME_START, null)
@@ -3240,21 +3245,23 @@ func _update_visual_feedback() -> void:
 
 func _draw_player() -> void:
 	# Unified player visual across idle / walking / repair:
-	#   - All three states use the same walk-frame art (128x160 baseline)
-	#     so the player footprint never jumps. Previously idle switched
-	#     to actor_player_*.png (768x1024, content bbox 52%x91%) which
-	#     displayed at ~116 px tall vs walk's ~97 px tall -- a visible
-	#     size jump on every transition.
-	#   - The previous player_repair_*.png overlay is dropped entirely:
-	#     per-alpha-channel audit, alpha=0 pixels in start/mid/end carry
-	#     RGB (255,255,255 white) / (30,30,30 dark-gray) / (82,82,82
-	#     mid-gray) respectively, so layering produced a colored halo
-	#     around the player. polish spec §4.5.
-	#   - Player silhouette is NEVER tilted or bobbed during repair -- the
-	#     swinging reads on a separate procedural hammer sprite next to
-	#     the player (hammer_sprite). Player itself stays locked to
-	#     player_pos with rotation=0, so idle / walking / repair share
-	#     the exact same silhouette.
+	#   - Idle / walking use the walk-frame art (128x160 baseline) so
+	#     the player footprint is stable across the day. Previously idle
+	#     switched to actor_player_*.png (768x1024, content bbox 52%x91%)
+	#     which displayed at ~116 px tall vs walk's ~97 px tall -- a
+	#     visible size jump on every transition.
+	#   - Repair uses player_repair_token (3 art frames, scale 0.12, so
+	#     the 896x1200 source art reads ~144px tall -- ~the same height
+	#     as walk). M13.1 swaps the v0.5 drop overlay (alpha=0 pixels
+	#     carried RGB 255/30/82 -> colored halo, polish spec §4.5) for
+	#     real matrix-MCP-generated art with png_to_rgba.py v3 alpha
+	#     restoration. Frame index follows PlayerRepairFx.repair_frame_for
+	#     (start/mid/end on a 0.36s cycle, ~3 swings per repair bar).
+	#   - Player silhouette is NEVER tilted or bobbed during repair --
+	#     the swinging reads on the art-frame swap itself, not on a
+	#     procedural hammer. Player itself stays locked to player_pos
+	#     with rotation=0, so idle / walking / repair share the same
+	#     footprint.
 	var frames: Array = walk_frames.get(player_facing, [])
 	var tex: Texture2D = null
 	if not frames.is_empty():
@@ -3318,13 +3325,27 @@ func _draw_player() -> void:
 			# Reset timer so next repair starts cleanly from FRAME_START.
 			player_repair_timer = 0.0
 
-	# Drop the broken repair overlay (asset audit: PNGs not fully
-	# transparent -- alpha=0 pixels carry RGB 255/30/82 for start/mid/end).
-	# The token stays in the tree so existing references don't null out,
-	# but it's permanently invisible so the halo can't appear.
+	# Drive the repair-action sprite. The 3 art frames (start/mid/end)
+	# replace the v0.5 drop overlay (alpha audit: start/mid/end carried
+	# RGB 255/30/82 in alpha=0 pixels, layered as a colored halo around
+	# the player -- polish spec §4.5). M13.1 ships real art frames
+	# generated via matrix MCP, with alpha restored by png_to_rgba.py v3.
+	# Token is mutually exclusive with the procedural hammer_sprite so we
+	# don't double-draw the hammer (art frame already includes it).
 	if player_repair_token != null:
-		player_repair_token.visible = false
-		player_repair_token.modulate.a = 0.0
+		if player_repair_active:
+			var frame_idx: int = PlayerRepairFx.repair_frame_for(player_repair_timer)
+			player_repair_token.texture = player_repair_textures.get(frame_idx, null)
+			player_repair_token.position = player_pos + Vector2(0.0, 8.0)
+			player_repair_token.visible = true
+			player_repair_token.modulate.a = 1.0
+			# Token includes the hammer drawn into the art; suppress the
+			# procedural hammer_sprite so it doesn't double up.
+			if hammer_sprite != null:
+				hammer_sprite.visible = false
+		else:
+			player_repair_token.visible = false
+			player_repair_token.modulate.a = 0.0
 
 
 # ============================================================================

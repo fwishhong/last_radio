@@ -8,10 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- M13.1: real art frames for the player repair-action sprite. The v0.5
+  drop-overlay tint (`player_repair_*.png` with alpha=0 pixels carrying
+  RGB 255/30/82 → colored halo around the player, polish spec §4.5) is
+  replaced with matrix-MCP-generated立绘 (clean-shaven 30s male, brown
+  leather jacket, dark jeans) restored to true RGBA via the new
+  `png_to_rgba.py` v6 auto-anchor corner histogram (handles matrix's
+  varying checker palette: v1 125/185, v2 112/152, v3 195/243, v4
+  80/124). `player_repair_token` is now a Sprite2D with scale 0.12
+  (896×1200 source → ~144 px body, ~matches walk sprite footprint) and
+  is mutually exclusive with the M13 procedural hammer sprite during
+  repair (avoids double-drawing the hammer). Frame index follows
+  `PlayerRepairFx.repair_frame_for(player_repair_timer)` so the 3-frame
+  cycle (start/mid/end on a 0.36 s loop, ~3 swings per repair bar)
+  drives both texture and timer. New `tools/m13_1_player_repair_test.gd`
+  with 13 assertions (3 loads + 3 bbox non-zero + 3 bbox real-size
+  + 3 PlayerRepairFx phase roundtrip + 1 luma consistency); new
+  `tools/capture_m13_1_player_repair.gd` writes the 3 single-frame
+  crops + a 3-up grid PNG to `user://last_radio_v2_m13_1_capture/` for
+  visual style-consistency review. 22/22 headless suites green.
 - M11.5: global audio mute. `Settings.DEFAULT_AUDIO_MUTED = true` so a
   fresh launch starts muted — first launch / dev-debug runs no longer
   bleed music + sfx into the room and disturb anyone nearby. Players
-  flip it off in Settings → Audio (new Mute checkbox). CLI override
+  flip it off in Settings ▸ Audio (new Mute checkbox). CLI override
   flags `--no-mute` / `--mute` / `--silent` / `--quiet` / `--audio` /
   `--sound` work per-session without persisting. `MenuUI._apply_audio`
   extended with `_apply_audio_mute` using `AudioServer.set_bus_mute`;
