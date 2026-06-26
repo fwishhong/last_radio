@@ -3602,13 +3602,40 @@ func _draw_player() -> void:
 	# offset, rotates ±0.5 rad on PlayerRepairFx REPAIR_CYCLE_SEC
 	# (~0.36s = ~3 swings per repair bar). Hidden when not repairing so
 	# the player isn't dragging a hammer around during walk / idle.
+	#
+	# Polish M10.5: hammer is now placed OUTSIDE the hotspot attack
+	# circle on the player-facing edge so it doesn't overlap the player
+	# sprite. Previously it sat at player_pos + (22, -54), which landed
+	# right on top of the player's shoulder and read as a visual artifact
+	# rather than a separate "I'm whacking this hotspot" prop.
 	if hammer_sprite != null:
 		if player_repair_active:
 			hammer_sprite.visible = true
-			# Hand offset relative to the player token. Player sprite
-			# is 128x160; hand sits at top-right so the hammer is
-			# clearly visible against the player silhouette.
-			hammer_sprite.position = player_pos + Vector2(22.0, -54.0)
+			# Anchor the hammer to the hotspot center if we have a target,
+			# otherwise just to the player (won't be visible unless we're
+			# actually repairing, so the fallback only matters for a single
+			# frame if state toggles).
+			var anchor_pos: Vector2 = player_pos
+			if player_target_id != "" and hotspots.has(player_target_id):
+				anchor_pos = hotspots[player_target_id]["pos"]
+			# Place the hammer just OUTSIDE the hotspot circle on the side
+			# closest to the player. If the player is right on top of the
+			# hotspot center, default to "above" so the hammer doesn't
+			# collapse to a single point.
+			var dir: Vector2
+			var base_angle: float
+			var offset_v: Vector2 = player_pos - anchor_pos
+			if offset_v.length() > 4.0:
+				dir = offset_v.normalized()
+				# Face the hammer toward the hotspot center so the strike
+				# reads as "into the door" rather than aimless flailing.
+				# atan2 returns 0 = +X; Sprite2D rotation 0 = up, so subtract
+				# PI/2 to align.
+				base_angle = atan2(-offset_v.y, -offset_v.x) - PI / 2.0
+			else:
+				dir = Vector2(0.0, -1.0)
+				base_angle = 0.0
+			hammer_sprite.position = anchor_pos + dir * (HOTSPOT_REACH + 6.0)
 			var phase: float = fmod(player_repair_timer, PlayerRepairFx.REPAIR_CYCLE_SEC) / PlayerRepairFx.REPAIR_CYCLE_SEC
 			# Two-segment swing: phase 0.0..0.45 -> swing DOWN (hammer
 			# arcs from -PI/3 back to -PI/6+1.8, max forward thrust near
@@ -3628,7 +3655,7 @@ func _draw_player() -> void:
 				# Recovery swing: back to -PI/3 over the remaining 0.55 phase
 				var recover_t: float = (phase - 0.45) / 0.55
 				swing = (-PI / 6.0 + 1.8) - recover_t * (PI / 3.0 + PI / 6.0 + 1.8)
-			hammer_sprite.rotation = swing
+			hammer_sprite.rotation = base_angle + swing
 			# M13 art-based hammer is a Sprite2D -- it redraws automatically
 			# when rotation changes (no queue_redraw needed). The previous
 			# procedural Node2D + _draw version needed the explicit
@@ -3648,15 +3675,18 @@ func _draw_player() -> void:
 	# don't double-draw the hammer (art frame already includes it).
 	if player_repair_token != null:
 		if player_repair_active:
-			var frame_idx: int = PlayerRepairFx.repair_frame_for(player_repair_timer)
-			player_repair_token.texture = player_repair_textures.get(frame_idx, null)
-			player_repair_token.position = player_pos + Vector2(0.0, 8.0)
-			player_repair_token.visible = true
-			player_repair_token.modulate.a = 1.0
-			# Token includes the hammer drawn into the art; suppress the
-			# procedural hammer_sprite so it doesn't double up.
-			if hammer_sprite != null:
-				hammer_sprite.visible = false
+			# Polish M10.5: skip the player_repair_token art swap entirely.
+			# The M13.1 art frames bake the hammer into the same sprite as
+			# the player body, which puts the hammer and the player silhouette
+			# in the same ~107x144 PNG box -- they overlap visually instead of
+			# reading as a separate "I'm whacking this hotspot" prop. The
+			# procedural hammer_sprite (now placed OUTSIDE the hotspot attack
+			# circle on the player-facing edge, see the block above) carries
+			# the swing motion by itself, so the player_token stays as the
+			# walk/idle sprite without a body-tilt that could warp the
+			# silhouette. polish spec §4.5 / §6.
+			player_repair_token.visible = false
+			player_repair_token.modulate.a = 0.0
 		else:
 			player_repair_token.visible = false
 			player_repair_token.modulate.a = 0.0
