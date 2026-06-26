@@ -130,6 +130,7 @@
 | M | 标题 | 预计 | 状态 | spec 链接 |
 |---|---|---|---|---|
 | ① (M10.5) | day-card 顺序错位修复 | 0.5d | ✅ `c6e44d6` | polish spec §0 |
+| M10.5 polish | 重做 Steam capsule + 修封面 + 角色立绘进游戏 + 清理 UI 残留 + 资源条改 chip | 1d | ✅ (本轮) | polish spec §6 / §7 |
 | ② (Round 2) | player 立绘 + repair overlay 修复 + dawn-fade reset + procedural pacing (night 2-10 6-10s cadence) | 1d | ✅ `faef1a4` + `66064a5` | polish spec §4.5 |
 | ③ (Round 2.1) | hammer swing thrust 1.4→1.8 rad + handle 暖棕调 + night 5+ 节奏 4-7s | 0.5d | ✅ `3b1b7e3` | polish spec §4.5 |
 | ④ (M13) | art-based hammer (Sprite2D + AI PNG) 替换 procedural draw | 0.5d | ✅ `0f431f9` | polish spec §4.5 |

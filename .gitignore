@@ -15,11 +15,13 @@ __pycache__/
 *.log
 *.autosave
 *.tmp
-# Dev screenshots (capture tool output)
-screenshots/*.png
+# Dev screenshots (capture tool output, debug-only per AGENTS.md)
+screenshots/
 # Godot import metadata is generated alongside assets and must be tracked
-# so editor opens work without a re-import pass.
-!*.import
+# so editor opens work without a re-import pass. Narrow scope to assets/
+# so screenshot .import files don't leak through.
+*.import
+!assets/**/*.import
 # Build outputs (rebuilt by tools/build_release.ps1, build_capsules.ps1, etc.)
 build/
 # Local scratchpad / notes

@@ -101,7 +101,7 @@
         {"id": "antenna_late", "time": 92, "type": "support", "target": "antenna", "pressure": 1.6},
         {"id": "late_push", "time": 104, "type": "director", "target": "barrier"}
       ],
-      "success_unlocks": ["back_door"],
+      "success_unlocks": ["back_door", "lily", "daniel"],
       "resource_stage": "visible"
     },
     {
@@ -117,7 +117,7 @@
         {"id": "back_door_assault", "time": 54, "type": "assault", "target": "back_door", "pressure": 5.6},
         {"id": "generator_drag", "time": 76, "type": "support", "target": "generator", "pressure": 1.4}
       ],
-      "success_unlocks": ["medbay"],
+      "success_unlocks": ["medbay", "tom"],
       "resource_stage": "visible"
     },
     {
@@ -127,7 +127,7 @@
       "duration": 180,
       "learning_goal": "学习不会立刻失败的软压力和药品/信任。",
       "unlocked_hotspots": ["front_door", "left_window", "right_window", "back_door", "generator", "radio", "antenna", "medbay"],
-      "day_cards": ["medbay_lamp", "nora_kit", "quiet_hours", "rescue_bleachers"],
+      "day_cards": ["medbay_lamp", "nora_kit", "quiet_hours", "rescue_bleachers", "let_daniel_go", "let_daniel_stay"],
       "fixed_events": [
         {"id": "medbay_call", "time": 54, "type": "support", "target": "medbay", "pressure": 1.4},
         {"id": "window_pair", "time": 82, "type": "assault", "target": "windows", "pressure": 3.6}
@@ -146,7 +146,8 @@
       "fixed_events": [
         {"id": "storage_shortage", "time": 44, "type": "support", "target": "storage", "pressure": 1.5},
         {"id": "hard_push", "time": 96, "type": "director", "target": "barrier"},
-        {"id": "late_storage", "time": 128, "type": "support", "target": "storage", "pressure": 1.2}
+        {"id": "late_storage", "time": 128, "type": "support", "target": "storage", "pressure": 1.2},
+        {"id": "tom_death", "time": 110, "type": "npc_loss", "target": "tom", "trust_delta": -1.0}
       ],
       "success_unlocks": ["exposure_backlash"],
       "resource_stage": "plank_stock"
@@ -167,8 +168,8 @@
       "success_unlocks": ["final_night"],
       "resource_stage": "exposure_main",
       "radio_channels": [
-        {"id": "victor", "label": "Victor", "desc": "在交代最后几条坐标"},
-        {"id": "elias", "label": "Elias", "desc": "在帮 Victor 守频率"},
+        {"id": "victor", "label": "[杂音]", "desc": "Victor 的频率只剩静电。没人回应。", "signal_quality": 0.0},
+        {"id": "elias", "label": "Elias", "desc": "他还在，但声音断断续续。"},
         {"id": "static", "label": "干扰", "desc": "追踪者开始反向扫描"}
       ],
       "radio_target_channel": "victor"

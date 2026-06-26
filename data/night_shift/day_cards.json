@@ -714,6 +714,58 @@
       ],
       "name_en": "Open Beacon",
       "body_en": "Final night, I open the beacon. The window gets longer, but every eye out there will look this way."
+    },
+    {
+      "id": "let_daniel_go",
+      "type": "people",
+      "name": "让 Daniel 走",
+      "body": "他的肩伤拖了大家一整夜。明天我让他往南边走，那边据说还有没塌的诊所。少一个人，门口我也得自己顶。",
+      "cost": {
+        "medicine": 1,
+        "trust": 1
+      },
+      "gain": {
+        "trust": -1,
+        "exposure": 1
+      },
+      "effects": [
+        {
+          "id": "npc_remove",
+          "target": "daniel"
+        }
+      ],
+      "tags": [
+        "npc",
+        "daniel",
+        "evacuate"
+      ],
+      "name_en": "Let Daniel Go",
+      "body_en": "His shoulder has been slowing us down for a night. Tomorrow I send him south toward a clinic that might still be standing. One less pair of hands at the door, and I cover it myself."
+    },
+    {
+      "id": "let_daniel_stay",
+      "type": "people",
+      "name": "让 Daniel 留下",
+      "body": "南边那条路我看不见底。他这条命我得担下来，哪怕他肩伤让他上不了场。明天再想办法，今夜我还是不让他一个人走出去。",
+      "cost": {
+        "medicine": 2
+      },
+      "gain": {
+        "trust": 1
+      },
+      "effects": [
+        {
+          "id": "npc_keep",
+          "target": "daniel"
+        }
+      ],
+      "tags": [
+        "npc",
+        "daniel",
+        "keep"
+      ],
+      "name_en": "Let Daniel Stay",
+      "body_en": "I can't see the end of that south road. I'll carry him on our books even with a busted shoulder. I'll find another way tomorrow; tonight I won't let him walk out alone."
     }
   ]
 }
