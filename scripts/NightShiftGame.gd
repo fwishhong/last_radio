@@ -224,6 +224,12 @@ var _pending_report_music: bool = false
 var flash_rect: ColorRect  # blackout / danger pulse
 var radio_panel: Panel  # contact progress panel (only visible at the radio)
 var radio_progress_bar: ColorRect
+# Polish M10.5: resource chips on the night HUD. Each chip = small icon
+# (24x24) + value label, packed into a single HBox. Replaces the old
+# "木板 4 · 零件 4 · 电池 2 · 药品 2 · 暴露度 0 · 信任 3" prompt_label
+# string with a scannable icon row.
+var _resource_bar: HBoxContainer
+var _resource_chip_labels: Dictionary = {}  # resource key -> Label (value text)
 var menu_ui  # MenuUI instance (CanvasLayer), see _build_menu_ui
 var tutorial_overlay  # TutorialOverlay instance (CanvasLayer), see _build_tutorial_overlay
 # Cached state for re-rendering after locale switch. _show_night_report is
@@ -377,6 +383,7 @@ func _ready() -> void:
 	_apply_audio_mute()
 	_build_walk_frames()
 	_build_ui()
+	_build_resource_bar()
 	# Migrate any v2 single-slot save before deciding what to show.
 	NightShiftSave.migrate_legacy_if_needed()
 	# If a save exists, prompt; otherwise fresh cover.
@@ -413,6 +420,39 @@ func _load_assets() -> void:
 		var p: String = ASSET_PATH + bg_keys[k]
 		if FileAccess.file_exists(p):
 			art[k] = load(p)
+
+	# Character portraits — used by the new cover / night-report / final
+	# screen overlays (M10.5 polish: "we drew 6 character sprites, now
+	# actually show them in the UI"). Each entry is a Texture2D or null if
+	# the PNG is missing. Only Player / Nora / Elias have a dedicated
+	# portrait_*.png (384x384); Lily / Tom / Daniel / Victor fall back to
+	# the wider character_*.png framing for now.
+	_load_character_portraits()
+
+
+func _load_character_portraits() -> void:
+	var portrait_keys := {
+		"player": "portrait_player.png",
+		"nora": "portrait_nora.png",
+		"elias": "portrait_elias.png",
+	}
+	for k in portrait_keys:
+		var p: String = ASSET_PATH + portrait_keys[k]
+		art["portrait_" + k] = _safe_load_texture(p)
+
+	# Wider framing for the rest — used for cover/final screen, sized down
+	# to match the portrait footprint.
+	var character_keys := {
+		"player_wide": "character_player.png",
+		"nora_wide": "character_nora.png",
+		"elias_wide": "character_elias.png",
+		"lily_wide": "character_lily.png",
+		"tom_wide": "character_tom.png",
+		"daniel_wide": "character_daniel.png",
+	}
+	for k in character_keys:
+		var p: String = ASSET_PATH + character_keys[k]
+		art[k] = _safe_load_texture(p)
 
 	# Hotspot state art — try loading, fall back to null (rendered as colored circles)
 	_load_hotspot_arts()
@@ -1051,6 +1091,102 @@ func _show_cover() -> void:
 	_show_slot_picker()
 
 
+# ============================================================================
+# PHASE: shared UI helpers (ally strip + radio panel hide)
+# ============================================================================
+
+# Force-hide the radio contact progress panel. The panel is mounted on the
+# in-game canvas and its visibility is driven by gameplay; some phase
+# transitions (cover / night_report / final) can leave it in a stale
+# "still visible" state if the player was standing at the radio when the
+# night ended. Polish M10.5 fix — every non-night phase calls this.
+func _hide_radio_panel() -> void:
+	if radio_panel != null:
+		radio_panel.visible = false
+
+
+# Ally strip: a horizontal row of character portrait chips used on the
+# cover, night report, and final screens. Renders ALL 6 characters
+# (player / nora / elias / lily / tom / daniel) so the player always sees
+# the full cast, with un-joined ones greyed out.
+#
+# Args:
+#   pos: top-left position of the strip
+#   per_chip: number of chips to render (set 0 to render all 6)
+#   _report_success: reserved for the night-report variant (currently
+#     unused — kept so the call site reads naturally and we can grow the
+#     strip's behavior later without touching every call site)
+func _build_ally_strip(pos: Vector2, per_chip: int = 7, _report_success: bool = true) -> void:
+	var portraits: Array = [
+		{"id": "player", "tex": art.get("portrait_player", null), "wide_tex": art.get("player_wide", null), "joined": true},
+		{"id": "nora", "tex": art.get("portrait_nora", null), "wide_tex": art.get("nora_wide", null), "joined": bool(allies.get("nora", false))},
+		{"id": "elias", "tex": art.get("portrait_elias", null), "wide_tex": art.get("elias_wide", null), "joined": bool(allies.get("elias", false))},
+		{"id": "lily", "tex": null, "wide_tex": art.get("lily_wide", null), "joined": false},
+		{"id": "tom", "tex": null, "wide_tex": art.get("tom_wide", null), "joined": false},
+		{"id": "daniel", "tex": null, "wide_tex": art.get("daniel_wide", null), "joined": false},
+	]
+	var chip_size: float = 56.0
+	var gap: float = 8.0
+	var label_h: float = 16.0
+	var strip_w: float = float(portraits.size()) * chip_size + float(portraits.size() - 1) * gap
+	for i in range(portraits.size()):
+		var p: Dictionary = portraits[i]
+		var chip := PanelContainer.new()
+		chip.position = pos + Vector2(float(i) * (chip_size + gap), 0)
+		chip.size = Vector2(chip_size, chip_size + label_h)
+		var style := StyleBoxFlat.new()
+		if bool(p.get("joined", false)):
+			style.bg_color = Color(0.10, 0.13, 0.18, 0.92)
+			style.border_color = Color(0.85, 0.72, 0.32, 0.95)
+		else:
+			style.bg_color = Color(0.04, 0.05, 0.07, 0.85)
+			style.border_color = Color(0.36, 0.40, 0.46, 0.55)
+		for k in ["left", "right", "top", "bottom"]:
+			style.set("border_width_" + k, 2)
+		for k in ["top_left", "top_right", "bottom_left", "bottom_right"]:
+			style.set("corner_radius_" + k, 6)
+		chip.add_theme_stylebox_override("panel", style)
+		card_layer.add_child(chip)
+
+		# Portrait texture
+		var tex: Texture2D = p.get("tex", null) if p.get("tex", null) != null else p.get("wide_tex", null)
+		if tex != null:
+			var tex_rect := TextureRect.new()
+			tex_rect.texture = tex
+			tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			tex_rect.position = Vector2(2, 2)
+			tex_rect.size = Vector2(chip_size - 4, chip_size - 4)
+			tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			if not bool(p.get("joined", false)):
+				tex_rect.modulate = Color(0.5, 0.5, 0.55, 0.65)
+			chip.add_child(tex_rect)
+		else:
+			# Fallback: character initial on a dim background
+			var initial := Label.new()
+			initial.text = String(p.get("id", "")).substr(0, 1).to_upper()
+			initial.position = Vector2(2, 12)
+			initial.size = Vector2(chip_size - 4, chip_size - 4 - 12)
+			initial.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			initial.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			initial.add_theme_font_size_override("font_size", 22)
+			initial.add_theme_color_override("font_color", Color(0.7, 0.74, 0.82, 0.6))
+			chip.add_child(initial)
+
+		# Name label below the chip
+		var name_lbl := Label.new()
+		name_lbl.text = String(p.get("id", "")).capitalize()
+		name_lbl.position = Vector2(0, chip_size + 1)
+		name_lbl.size = Vector2(chip_size, label_h)
+		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_lbl.add_theme_font_size_override("font_size", 10)
+		if bool(p.get("joined", false)):
+			name_lbl.add_theme_color_override("font_color", Color(0.95, 0.86, 0.55))
+		else:
+			name_lbl.add_theme_color_override("font_color", Color(0.5, 0.55, 0.62, 0.6))
+		chip.add_child(name_lbl)
+
+
 func _show_cover_with_continue() -> void:
 	# Cover screen variant that overlays a "Continue" button on top of the slot
 	# picker. Used after a save so the player can resume without re-picking the
@@ -1115,24 +1251,155 @@ func _show_slot_picker() -> void:
 	# Hotspots only belong on the night map; cover/slot/difficulty pickers
 	# would otherwise show stale button rings over the background.
 	hotspot_layer.visible = false
+	# Player token doesn't belong on the cover either — hide it so the
+	# character overlay we add below is the only "who's in this game" hint.
+	player_token.visible = false
+	player_repair_token.visible = false
+	# Polish M10.5: hide the radio panel so it doesn't bleed onto the cover.
+	_hide_radio_panel()
+	# Resource chips are night-only; show the prompt_label row again.
+	_set_resource_bar_visible(false)
+	# Cover has its own title block — the legacy prompt_label "subtitle"
+	# and the body hint overlap with the new block, so hide them on cover.
+	prompt_label.visible = false
+	prompt_label.text = ""
+	log_label.visible = false
+	log_label.text = ""
+	# Hide tutorial overlay on the cover.
+	if tutorial_overlay:
+		tutorial_overlay.visible = false
 	if art.get("cover"):
 		bg.texture = art["cover"]
 	_play_music("cover")
 
-	status_label.text = I18n.t("title")
-	prompt_label.text = I18n.t("slot_pick_title")
+	# Polish M10.5: cover now reads as a proper title screen, not just
+	# "three save slots" sitting in a corner. Title block + tagline +
+	# player silhouette in the lower-right + dim scrim. The slot cards
+	# are pushed down to make room.
+	_build_cover_title_block()
+	_apply_cover_scrim()
+	_build_cover_character_overlay()
+
+	# Status / prompt / log fill different roles on the cover:
+	#   - status_label = the big 末日电台 title (overridden by title block)
+	#   - prompt_label = 旧体育馆守夜 · 第一章 subtitle
+	#   - log_label    = body hint text (left as is, hidden by title block bg)
+	prompt_label.text = I18n.t("subtitle_chapter")
 	log_label.text = I18n.t("cover_body")
 
 	# Build 3 slot cards side by side.
-	var slot_w: float = 320.0
-	var slot_h: float = 280.0
-	var gap: float = 30.0
+	var slot_w: float = 340.0
+	var slot_h: float = 300.0
+	var gap: float = 28.0
 	var total_w: float = 3.0 * slot_w + 2.0 * gap
 	var start_x: float = (SCREEN_SIZE.x - total_w) * 0.5
-	var y: float = 220.0
+	var y: float = 260.0
 	for slot in range(1, 4):
 		var sx: float = start_x + (slot - 1) * (slot_w + gap)
 		_build_slot_card(slot, Vector2(sx, y), Vector2(slot_w, slot_h))
+
+
+# Cover-screen title block: big 末日电台 + 旧体育馆守夜 · 第一章 + tagline.
+# Drawn into card_layer so it gets cleared on phase change. The three
+# labels share a single dim backdrop so they stay readable over the
+# stadium-room background.
+func _build_cover_title_block() -> void:
+	var block_w: float = 760.0
+	var block_h: float = 150.0
+	var block_x: float = (SCREEN_SIZE.x - block_w) * 0.5
+	var block_y: float = 50.0
+	var backdrop := ColorRect.new()
+	backdrop.position = Vector2(block_x, block_y)
+	backdrop.size = Vector2(block_w, block_h)
+	backdrop.color = Color(0, 0, 0, 0.42)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card_layer.add_child(backdrop)
+
+	# Main title 末日电台 — also rebind status_label so the chrome strip
+	# doesn't double-print the same string in tiny font.
+	status_label.text = ""
+	status_label.visible = false
+	var title := Label.new()
+	title.text = I18n.t("title_main")
+	title.position = Vector2(block_x, block_y + 12)
+	title.size = Vector2(block_w, 64)
+	title.add_theme_font_size_override("font_size", 48)
+	title.add_theme_color_override("font_color", Color(1.0, 0.96, 0.86))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	title.add_theme_constant_override("outline_size", 4)
+	card_layer.add_child(title)
+
+	var subtitle := Label.new()
+	subtitle.text = I18n.t("subtitle_chapter")
+	subtitle.position = Vector2(block_x, block_y + 78)
+	subtitle.size = Vector2(block_w, 32)
+	subtitle.add_theme_font_size_override("font_size", 22)
+	subtitle.add_theme_color_override("font_color", Color(1.0, 0.78, 0.36))
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	subtitle.add_theme_constant_override("outline_size", 3)
+	card_layer.add_child(subtitle)
+
+	var tagline := Label.new()
+	tagline.text = "Ten Nights. One Watch."
+	tagline.position = Vector2(block_x, block_y + 114)
+	tagline.size = Vector2(block_w, 24)
+	tagline.add_theme_font_size_override("font_size", 15)
+	tagline.add_theme_color_override("font_color", Color(0.78, 0.84, 0.92))
+	tagline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tagline.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	tagline.add_theme_constant_override("outline_size", 2)
+	card_layer.add_child(tagline)
+
+
+# Cover scrim: gentle top-to-bottom dark gradient so the title block + slot
+# cards read clearly over the stadium-room background. The scrim is mouse-
+# transparent so the underlying buttons still receive clicks.
+func _apply_cover_scrim() -> void:
+	var scrim := ColorRect.new()
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scrim.color = Color(0, 0, 0, 0.32)
+	scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Sit ABOVE the bg but BELOW the slot-card buttons — card_layer z order
+	# already does this (added before slot cards).
+	card_layer.add_child(scrim)
+	card_layer.move_child(scrim, 0)
+
+
+# Player silhouette in the lower-right of the cover. Sized to a single
+# small figure so the slot cards stay the visual focus. Uses
+# character_player.png (the wide framing) — the same asset the in-game
+# player_token uses. Falls back to portrait_player.png if the wider
+# framing isn't available.
+func _build_cover_character_overlay() -> void:
+	var tex: Texture2D = art.get("player_wide", null)
+	if tex == null:
+		tex = art.get("portrait_player", null)
+	if tex == null:
+		return
+	var sprite := Sprite2D.new()
+	sprite.texture = tex
+	# Constrain to the right edge, below the slot-card row. We aim for a
+	# silhouette that's ~280px tall and tucked into the right gutter so
+	# it doesn't compete with the slot cards for attention.
+	var target_h: float = 290.0
+	var src_size: Vector2 = tex.get_size()
+	if src_size.y <= 0.0:
+		return
+	var scale: float = target_h / src_size.y
+	var draw_w: float = src_size.x * scale
+	sprite.scale = Vector2(scale, scale)
+	# Position so the sprite's bottom-right corner sits in the lower-
+	# right gutter. Sprite2D.position is the center, so back off half
+	# the drawn width/height.
+	sprite.position = Vector2(
+		SCREEN_SIZE.x - draw_w * 0.5 - 8.0,
+		SCREEN_SIZE.y - target_h * 0.5 - 16.0
+	)
+	sprite.modulate = Color(1, 1, 1, 0.92)
+	sprite.z_index = 1  # above the dim scrim so the silhouette reads
+	card_layer.add_child(sprite)
 
 
 func _build_slot_card(slot: int, pos: Vector2, sz: Vector2) -> void:
@@ -1140,13 +1407,30 @@ func _build_slot_card(slot: int, pos: Vector2, sz: Vector2) -> void:
 	var card := Panel.new()
 	card.position = pos
 	card.size = sz
+	# Override the default light-grey stylebox with a dark scrim so the
+	# card reads as a clear panel on top of the stadium-room background.
+	var card_style := StyleBoxFlat.new()
+	card_style.bg_color = Color(0.045, 0.060, 0.075, 0.92)
+	card_style.border_color = Color(0.65, 0.55, 0.35, 0.95)
+	for k in ["left", "right", "top", "bottom"]:
+		card_style.set("border_width_" + k, 2)
+	for k in ["top_left", "top_right", "bottom_left", "bottom_right"]:
+		card_style.set("corner_radius_" + k, 10)
+	card_style.content_margin_left = 18
+	card_style.content_margin_right = 18
+	card_style.content_margin_top = 16
+	card_style.content_margin_bottom = 16
+	card.add_theme_stylebox_override("panel", card_style)
 	card_layer.add_child(card)
 
 	var title: Label = Label.new()
 	title.text = "Slot %d" % slot
 	title.position = Vector2(20, 12)
 	title.size = Vector2(sz.x - 40, 28)
-	title.add_theme_constant_override("font_size", 20)
+	title.add_theme_constant_override("font_size", 22)
+	title.add_theme_color_override("font_color", Color(1.0, 0.84, 0.45))
+	title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
+	title.add_theme_constant_override("outline_size", 2)
 	card.add_child(title)
 
 	if summary.exists:
@@ -1158,7 +1442,8 @@ func _build_slot_card(slot: int, pos: Vector2, sz: Vector2) -> void:
 			line1.text = night_text
 		line1.position = Vector2(20, 56)
 		line1.size = Vector2(sz.x - 40, 28)
-		line1.add_theme_constant_override("font_size", 18)
+		line1.add_theme_font_size_override("font_size", 18)
+		line1.add_theme_color_override("font_color", Color(0.92, 0.96, 0.90))
 		card.add_child(line1)
 
 		var diff_label: Label = Label.new()
@@ -1169,22 +1454,22 @@ func _build_slot_card(slot: int, pos: Vector2, sz: Vector2) -> void:
 			diff_label.text = NightShiftSave.preset_label(preset)
 		diff_label.position = Vector2(20, 88)
 		diff_label.size = Vector2(sz.x - 40, 24)
-		diff_label.add_theme_constant_override("font_size", 14)
+		diff_label.add_theme_font_size_override("font_size", 14)
 		diff_label.modulate = Color(0.7, 0.85, 1, 1)
 		card.add_child(diff_label)
 
 		var play_btn := _make_button(
 			I18n.t("slot_play"),
 			Vector2(20, 130),
-			Vector2(sz.x - 40, 44),
+			Vector2(sz.x - 40, 48),
 			_on_slot_play_pressed.bind(slot)
 		)
 		card.add_child(play_btn)
 
 		var erase_btn := _make_button(
 			I18n.t("slot_erase"),
-			Vector2(20, 184),
-			Vector2(sz.x - 40, 40),
+			Vector2(20, 192),
+			Vector2(sz.x - 40, 42),
 			_on_slot_erase_pressed.bind(slot)
 		)
 		card.add_child(erase_btn)
@@ -1193,7 +1478,7 @@ func _build_slot_card(slot: int, pos: Vector2, sz: Vector2) -> void:
 		empty_label.text = I18n.t("slot_empty")
 		empty_label.position = Vector2(20, 90)
 		empty_label.size = Vector2(sz.x - 40, 32)
-		empty_label.add_theme_constant_override("font_size", 18)
+		empty_label.add_theme_font_size_override("font_size", 18)
 		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		empty_label.modulate = Color(0.6, 0.6, 0.7, 1)
 		card.add_child(empty_label)
@@ -1201,7 +1486,7 @@ func _build_slot_card(slot: int, pos: Vector2, sz: Vector2) -> void:
 		var new_btn := _make_button(
 			I18n.t("slot_new"),
 			Vector2(20, 160),
-			Vector2(sz.x - 40, 64),
+			Vector2(sz.x - 40, 76),
 			_on_slot_new_pressed.bind(slot)
 		)
 		card.add_child(new_btn)
@@ -1239,6 +1524,16 @@ func _show_difficulty_picker() -> void:
 	card_layer.visible = true
 	# Difficulty picker overlays the cover background; hide hotspots.
 	hotspot_layer.visible = false
+	player_token.visible = false
+	player_repair_token.visible = false
+	_hide_radio_panel()
+	_set_resource_bar_visible(false)
+	prompt_label.visible = false
+	prompt_label.text = ""
+	log_label.visible = false
+	log_label.text = ""
+	if tutorial_overlay:
+		tutorial_overlay.visible = false
 
 	status_label.text = I18n.t("difficulty_pick_title")
 	prompt_label.text = ""
@@ -1605,6 +1900,16 @@ func _show_day() -> void:
 	# Day picker overlays the room background; hide the night-only hotspots
 	# so their stale state rings don't bleed through.
 	hotspot_layer.visible = false
+	# Hide in-room player + radio panel — the day picker is its own UI.
+	player_token.visible = false
+	player_repair_token.visible = false
+	_hide_radio_panel()
+	_set_resource_bar_visible(false)
+	prompt_label.visible = true
+	log_label.visible = true
+	# Hide tutorial overlay on the day picker.
+	if tutorial_overlay:
+		tutorial_overlay.visible = false
 	if art.get("day"):
 		bg.texture = art["day"]
 	_play_music("day")
@@ -1612,6 +1917,11 @@ func _show_day() -> void:
 	var level: Dictionary = NightShiftLevels.LEVELS[night_index]
 	status_label.text = I18n.t("day_header", [night_index + 1])
 	prompt_label.text = I18n.t_field(level, "briefing")
+
+	# Polish M10.5: 6-character ally strip across the top so the day
+	# picker makes the "who's in the shelter right now" state visible
+	# without forcing the player to read the day-card body.
+	_build_ally_strip(Vector2(20, 36), 7, true)
 
 	# Build the card list: chapter-declared + always show "start" first as free pass.
 	var raw_choices: Array = level.get("choices", [])
@@ -1897,6 +2207,10 @@ func _show_night() -> void:
 	for id in hotspots:
 		if hotspots[id].has("proc_cooldown"):
 			hotspots[id]["proc_cooldown"] = 0.0
+	# Re-show the player token (the cover screen hides it for the silhouette
+	# overlay; night play needs the walk sprite visible).
+	player_token.visible = true
+	player_repair_token.visible = false
 	_play_music("night_early")
 
 	var level: Dictionary = NightShiftLevels.LEVELS[night_index]
@@ -3473,6 +3787,24 @@ func _show_night_report(success: bool, body: String) -> void:
 	# context for the night map only — keep them hidden so the stats panel
 	# is the focus.
 	hotspot_layer.visible = false
+	# Hide the player + repair token too — the report screen has its own
+	# character strip and the in-room sprite would visually clash.
+	player_token.visible = false
+	player_repair_token.visible = false
+	# Polish M10.5 fix: the radio contact progress panel belongs on the
+	# night map only. After a night ends the panel sometimes still had
+	# stale channel buttons visible; force-hide here so the report screen
+	# reads as a single coherent surface.
+	_hide_radio_panel()
+	_set_resource_bar_visible(false)
+	prompt_label.visible = true
+	log_label.visible = true
+	# Tutorial overlay belongs on the night map; force the whole
+	# CanvasLayer invisible on the report screen so the stats panel
+	# reads cleanly (some internal tutorial state can leave the skip
+	# button visible even after hide_overlay()).
+	if tutorial_overlay:
+		tutorial_overlay.visible = false
 	if success and art.get("report"):
 		bg.texture = art["report"]
 	elif not success and art.get("final_bad"):
@@ -3492,6 +3824,12 @@ func _show_night_report(success: bool, body: String) -> void:
 	# Status bar (top) — title + result
 	status_label.text = "第 %d 夜 · %s%s" % [night_index + 1, night_title, (" · 成功" if success else " · 失败")]
 	prompt_label.text = learning_goal
+
+	# Polish M10.5: 6-character ally strip across the top of the report
+	# so the player can see at a glance who's still in the shelter, who
+	# hasn't joined yet, and who joined/left this night. Sits below the
+	# status bar.
+	_build_ally_strip(Vector2(20, 36), 7, success)
 
 	# Body text in log area; append the hotspot status summary + per-night stats.
 	var summary_lines: Array = []
@@ -3579,11 +3917,41 @@ func _show_final() -> void:
 	# Same as night report — final screen is its own scene, hide the map
 	# hotspot buttons so the dawn illustration reads cleanly.
 	hotspot_layer.visible = false
+	# Final screen has its own character overlay; hide the in-room sprite.
+	player_token.visible = false
+	player_repair_token.visible = false
+	_hide_radio_panel()
+	_set_resource_bar_visible(false)
+	prompt_label.visible = true
+	log_label.visible = true
+	# Hide tutorial overlay on the final screen too.
+	if tutorial_overlay:
+		tutorial_overlay.visible = false
 	if art.get("final_good"):
 		bg.texture = art["final_good"]
 	_play_music("final")
 	status_label.text = "第一章通关"
 	prompt_label.text = "旧体育馆成为城市里第一座被点亮的坐标。"
+
+	# Polish M10.5: 6-character ally strip across the top so the final
+	# screen acknowledges every survivor (and the ones who didn't make it
+	# by greying them out — Tom's silhouette at night 8 reads as a quiet
+	# elegy without needing extra UI).
+	_build_ally_strip(Vector2(20, 36), 7, true)
+
+	# Player silhouette on the right (matches the cover screen mirror).
+	var final_tex: Texture2D = art.get("player_wide", null)
+	if final_tex != null:
+		var sprite := Sprite2D.new()
+		sprite.texture = final_tex
+		var h: float = SCREEN_SIZE.y * 0.62
+		var w: float = h * 0.75
+		sprite.position = Vector2(SCREEN_SIZE.x - w * 0.55, SCREEN_SIZE.y - h * 0.55)
+		sprite.scale = Vector2(w / final_tex.get_width(), h / final_tex.get_height())
+		sprite.modulate = Color(1, 1, 1, 0.65)
+		sprite.z_index = -1
+		card_layer.add_child(sprite)
+
 	# Bump the NG+ counter and persist it before showing buttons.
 	ng_plus_count += 1
 	if current_slot > 0:
@@ -3652,6 +4020,109 @@ func _log(msg: String) -> void:
 	log_label.text = "\n".join(logs)
 
 
+# Build the resource-chip bar shown in the night HUD. Replaces the old
+# text-only "木板 4 · 零件 4 ..." string with scannable icon + value chips.
+# Hidden in non-night phases; _update_status_label flips it visible
+# while the player is in the night map.
+func _build_resource_bar() -> void:
+	_resource_bar = HBoxContainer.new()
+	_resource_bar.position = Vector2(24, 56)
+	_resource_bar.add_theme_constant_override("separation", 6)
+	_resource_bar.visible = false
+	hud_layer.add_child(_resource_bar)
+
+	# Chip order matches the canonical narrative: building blocks (plank /
+	# parts) first, consumables (battery / medicine) next, then social
+	# pressure (threat / trust). Each entry is:
+	#   key      : resource key the value is read from
+	#   icon_tex : Texture2D — icon_door_reinforce for plank, etc.
+	#   name     : fallback letter glyph (used only if icon_tex is null)
+	#   color    : chip background tint
+	var chips: Array = [
+		{"key": "plank",     "icon_tex": art.get("icons", {}).get("door_reinforce", null),  "name": "P", "color": Color(0.78, 0.55, 0.30)},
+		{"key": "parts",     "icon_tex": art.get("icons", {}).get("workbench",     null),  "name": "K", "color": Color(0.65, 0.65, 0.70)},
+		{"key": "battery",   "icon_tex": art.get("icons", {}).get("battery_buffer", null),  "name": "B", "color": Color(0.45, 0.78, 0.95)},
+		{"key": "medicine",  "icon_tex": art.get("icons", {}).get("medbay",        null),  "name": "M", "color": Color(0.65, 0.95, 0.65)},
+		{"key": "threat",    "icon_tex": art.get("alerts",  {}).get("warning",       null),  "name": "!", "color": Color(0.95, 0.55, 0.40)},
+		{"key": "trust",     "icon_tex": art.get("alerts",  {}).get("braced",        null),  "name": "T", "color": Color(0.95, 0.85, 0.45)},
+	]
+	for c in chips:
+		var chip := PanelContainer.new()
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0, 0, 0, 0.55)
+		style.border_color = (c.get("color", Color.WHITE) as Color)
+		style.border_color.a = 0.85
+		for k in ["left", "right", "top", "bottom"]:
+			style.set("border_width_" + k, 1)
+		for k in ["top_left", "top_right", "bottom_left", "bottom_right"]:
+			style.set("corner_radius_" + k, 4)
+		style.content_margin_left = 4
+		style.content_margin_right = 6
+		style.content_margin_top = 2
+		style.content_margin_bottom = 2
+		chip.add_theme_stylebox_override("panel", style)
+		_resource_bar.add_child(chip)
+
+		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 4)
+		chip.add_child(h)
+
+		var icon := TextureRect.new()
+		icon.size = Vector2(20, 20)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if c.get("icon_tex", null) != null:
+			icon.texture = c["icon_tex"]
+		else:
+			# Fallback glyph: single letter on a tinted background.
+			var fallback := Label.new()
+			fallback.text = str(c.get("name", "?"))
+			fallback.add_theme_font_size_override("font_size", 14)
+			fallback.add_theme_color_override("font_color", c.get("color", Color.WHITE))
+			fallback.size = Vector2(20, 20)
+			fallback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			fallback.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			chip.add_child(fallback)
+		h.add_child(icon)
+
+		var val_lbl := Label.new()
+		val_lbl.text = "0"
+		val_lbl.add_theme_font_size_override("font_size", 15)
+		val_lbl.add_theme_color_override("font_color", Color(0.96, 0.94, 0.86))
+		val_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+		val_lbl.add_theme_constant_override("outline_size", 2)
+		h.add_child(val_lbl)
+		_resource_chip_labels[str(c.get("key", ""))] = val_lbl
+
+
+# Refresh chip values from the current resources dict. Called from
+# _update_status_label during the night phase.
+func _update_resource_bar() -> void:
+	if _resource_bar == null:
+		return
+	for k in _resource_chip_labels:
+		var lbl: Label = _resource_chip_labels[k]
+		lbl.text = str(int(resources.get(k, 0)))
+		# Tint threat chip red when the value is climbing — visual cue
+		# to the player that "exposure" is the only resource that goes
+		# the wrong way without being obviously broken.
+		if k == "threat" and int(resources.get("threat", 0)) >= 5:
+			lbl.add_theme_color_override("font_color", Color(1.0, 0.45, 0.40))
+
+
+# Toggle the night-only resource chip bar. Hides the prompt_label row
+# when on (so we don't double-print) and restores it when off. Every
+# phase change calls this once.
+func _set_resource_bar_visible(on: bool) -> void:
+	if _resource_bar:
+		_resource_bar.visible = on
+	if prompt_label:
+		prompt_label.visible = not on
+		if not on:
+			prompt_label.text = ""
+
+
 func _unlock_ach(id: String) -> void:
 	# Thin facade so all 8 trigger sites have one place to call. Steamworks
 	# is registered as an autoload (project.godot:21); resolve via the
@@ -3669,11 +4140,14 @@ func _update_status_label() -> void:
 	var secs := int(floor(remaining - mins * 60))
 	status_label.text = "第 %d 夜  %02d:%02d" % [night_index + 1, mins, secs]
 
-	var resource_text := []
-	for k in resources:
-		var v = int(resources[k])
-		var name := _resource_name(k)
-		resource_text.append("%s %d" % [name, v])
-	prompt_label.text = "  ·  ".join(resource_text)
+	# Polish M10.5: use the icon-chip resource bar instead of the old
+	# "木板 4 · 零件 4 ..." text string. Hide the prompt_label row so
+	# we don't double-print. The radio-active hint is appended to the
+	# status_label so the player still sees "电台呼叫中".
+	if _resource_bar:
+		_resource_bar.visible = true
+		_update_resource_bar()
+	prompt_label.visible = false
+	prompt_label.text = ""
 	if _is_radio_active():
-		prompt_label.text += "  ·  电台呼叫中（走到电台接通）"
+		status_label.text += "  ·  电台呼叫中"

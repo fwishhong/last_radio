@@ -8,6 +8,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M10.5 visual polish suite** — covers, capsules, character art in
+  every screen, resource bar as icon chips, and a UI-leak sweep. 19/19
+  headless suites green (~720 assertions). Polish spec §6 / §7.
+
+  - **Steam capsule art** regenerated. `build/store_capsules/header_capsule.png`
+    (1920×620) + `main_capsule.png` (616×353) replaced the old pixel-art
+    versions. AI-generated background (matrix MCP) layered with Chinese
+    + English title text via PowerShell GDI (Microsoft YaHei UI 48-72pt
+    white/orange + light-grey tagline). Brand line: "Ten Nights. One
+    Watch." Steam card text: "18 RMB · 中英双语 · Steam 2026". Re-run
+    via `tools/build_capsules_v2.ps1`. `.png.import` sidecar files
+    written with stable uids so the editor opens without re-import.
+  - **Cover screen rewritten** (`NightShiftGame._show_slot_picker` +
+    `_build_cover_title_block` / `_apply_cover_scrim` /
+    `_build_cover_character_overlay` / `_build_slot_card`). The title
+    "末日电台" now sits centered as a 64-pt white headline, with the
+    subtitle "旧体育馆守夜 · 第一章" in 26-pt warm orange directly below,
+    and the English tagline "Ten Nights. One Watch." underneath. The
+    3 slot cards are deep navy scrims with warm-orange 2-px borders,
+    rounded 10-px corners, and centered "新游戏 / 继续" buttons —
+    replacing the previous default-grey Godot panel. A dim 0.32-alpha
+    scrim sits above the background but below the cards so the title
+    text reads cleanly on bright photos. `character_player.png` is
+    placed as a 290-px-tall silhouette in the lower-right (modulate
+    0.92, z_index 1) — visible but not competing with the slots.
+    New i18n key `title_main` ("末日电台" / "Last Radio").
+  - **Character portraits in every screen.** `art` now carries 6
+    `character_*` wide-framing textures (player / nora / elias / lily /
+    tom / daniel) plus 3 `portrait_*` (player / nora / elias).
+    `_build_ally_strip` shows all 6 headshots across the top of the
+    day picker, night report, and final score screens — joined NPCs
+    are lit, un-joined NPCs are dimmed grey. On the final screen the
+    strip acknowledges everyone, including the ones who didn't make
+    it (Tom at night 8 reads as a quiet elegy without extra UI). The
+    player silhouette also anchors the right edge of the cover and
+    the final score screens.
+  - **Resource bar is now icon chips.** `_build_resource_bar` +
+    `_update_resource_bar` render 6 themed chips (plank / parts /
+    battery / medicine / threat / trust) using the existing
+    `art["icons"]` (door_reinforce / workbench / battery_buffer /
+    medbay) + `art["alerts"]` (warning / braced). Each chip is a
+    36-px-tall `PanelContainer` with a 28×28 icon, value, and label.
+    Threat ≥ 5 tints the threat chip red. The bar is auto-hidden on
+    every screen that isn't the live night map (cover / day picker /
+    night report / final / difficulty picker) via
+    `_set_resource_bar_visible(false)`.
+  - **UI leak sweep.** `_hide_radio_panel()` is now called from every
+    non-night phase (cover / day picker / night report / final /
+    difficulty picker) so the radio contact buttons don't bleed into
+    the title or report screens. `player_token.visible = false` on
+    cover and final. `tutorial_overlay.visible = false` on cover /
+    day / night report / final (the per-step `hide_overlay()` was
+    leaving the skip button visible after `start()` re-entered).
+
+### Fixed
+- `tools/night_shift_data_validate.gd` extended to accept the `people`
+  day-card type. Two `people`-typed cards (let_daniel_stay and one
+  other) were tripping the validator's 5-value whitelist; without the
+  fix `night_shift_data_validate` fails and 19/19 turns 18/19.
+- `character_player` silhouette on the cover was previously drawn at
+  `z_index = -1` and `modulate = 0.55`, putting it behind the dim
+  scrim and rendering it invisible against the room background. Now
+  `z_index = 1` and `modulate = 0.92` so the figure reads.
+- `night_report_stats_test` was rendering with stale tutorial overlay
+  visible in capture screenshots because `_show_night_report` only
+  called `tutorial_overlay.hide_overlay()` — internal tutorial state
+  could still leave the skip button on screen. Now the whole
+  `tutorial_overlay` CanvasLayer is force-hidden on every non-night
+  phase.
+
+### Tests
+- `tools/capture_v2_m10_5.gd` — new capture script. Renders the 5
+  main screens (cover_empty / day_picker / night_running /
+  night_report / final) to `user://last_radio_v2_m10_5_capture/`
+  (drop `--headless` so the rendering backend is alive). Used for
+  visual review of all M10.5 changes.
+- 19/19 headless suites pass (`tools/ampersand_lint_test`,
+  `night_shift_basic_test`, `night_shift_data_validate`, ...).
+
+### Notes
+- Old pixel-art `main_capsule.png` / `header_capsule.png` retained
+  in `build/store_capsules/_legacy/` for reference (not used by
+  `export_presets.cfg`).
+
 - M14: day-card body rewrite into first-person narrator monologues.
   All 29 day cards in `data/night_shift/day_cards.json` now read as the
   player narrator weighing each option in their head — short, tired,

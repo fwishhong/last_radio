@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b7m15dnlchrc"
-path="res://.godot/imported/character_daniel.png-672a87c65b80097e495123314e92f29c.ctex"
+uid="uid://d4lp7fm8t7pui"
+path="res://.godot/imported/_m15_character_set_overview.png-469360957efe9f86757df5eedc26c20e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/final/night_shift/character_daniel.png"
-dest_files=["res://.godot/imported/character_daniel.png-672a87c65b80097e495123314e92f29c.ctex"]
+source_file="res://assets/final/night_shift/_m15_character_set_overview.png"
+dest_files=["res://.godot/imported/_m15_character_set_overview.png-469360957efe9f86757df5eedc26c20e.ctex"]
 
 [params]
 

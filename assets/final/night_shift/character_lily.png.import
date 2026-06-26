@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://502bcbc6dd5b6"
-path="res://.godot/imported/character_lily.png-3d4e7cf0cf4c3c58c97622931e1bdd45.ctex"
+uid="uid://dx666vwfex00t"
+path="res://.godot/imported/character_lily.png-9f89d8fb17bd74a5cfb5f2565125a330.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/final/night_shift/character_lily.png"
-dest_files=["res://.godot/imported/character_lily.png-3d4e7cf0cf4c3c58c97622931e1bdd45.ctex"]
+dest_files=["res://.godot/imported/character_lily.png-9f89d8fb17bd74a5cfb5f2565125a330.ctex"]
 
 [params]
 

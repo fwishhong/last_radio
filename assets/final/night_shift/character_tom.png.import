@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://48005c15d34a8"
-path="res://.godot/imported/character_tom.png-7e3e93f2da12323376cbcc7125ee0292.ctex"
+uid="uid://c65w0xmefoyyv"
+path="res://.godot/imported/character_tom.png-1c985543d069f8eae5f2017dd654c526.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/final/night_shift/character_tom.png"
-dest_files=["res://.godot/imported/character_tom.png-7e3e93f2da12323376cbcc7125ee0292.ctex"]
+dest_files=["res://.godot/imported/character_tom.png-1c985543d069f8eae5f2017dd654c526.ctex"]
 
 [params]
 
