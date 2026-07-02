@@ -1,20 +1,16 @@
 extends Node
 # Steamworks facade. A thin wrapper around GodotSteam (when available)
 # or a no-op stub (when not). This lets the rest of the game call
-# `Steam.unlock_achievement("X")` without caring whether the SDK is loaded.
+# `Steamworks.unlock_achievement("X")` without caring whether the SDK is loaded.
 #
-# The actual GodotSteam extension is NOT bundled in this repo (its license
-# is permissive but the binary distribution model is awkward). To enable
-# real Steam integration:
-#   1. Install GodotSteam via the Asset Library or by adding the GDExtension
-#   2. Replace the body of each method below with the real call:
-#        Steam.unlockAchievement("X")  (or Steam.setAchievement)
-#        Steam.fileWrite(...)        (or Steam.storeText)
-#        Steam.setRichPresence("X")
-#   3. Set config/use_steam = true in project.godot
-#
-# For now: every method either logs (debug) or no-ops. The interface stays
-# the same, so swapping is a one-file change.
+# GodotSteam 4.20 (Steamworks 1.64, Godot 4.7) is wired in via the
+# combined binary at C:\Users\Administrator\Desktop\codex\
+# Godot_v4.7-stable_win64_steam.exe (Godot 4.7 custom_build + GodotSteam
+# linked in) — see docs/M6_steamworks_setup.md once M6 ship-note lands.
+# The repo never carries the binary; CI / dev installs it locally. The
+# facade below auto-detects via ClassDB.class_exists("Steam") and only
+# hits the real API when that class is registered (i.e. when running
+# under the combined GodotSteam binary, not the plain Godot 4.7 binary).
 #
 # Chapter 1 ships with 8 reachable achievements. NG+ and Hard-Mode clears
 # are intentionally out of scope until those modes land.
@@ -58,10 +54,13 @@ func unlock_achievement(id: String) -> bool:
 		return true  # already unlocked
 	_unlocked[id] = true
 	if _enabled:
-		# Real call (commented out; uncomment when GodotSteam is wired in):
-		# Steam.setAchievement(ACHIEVEMENT_IDS[id], true)
-		# Steam.storeStats()
-		pass
+		# GodotSteam 4.20 / Steamworks 1.64. setAchievement marks the
+		# achievement unlocked in the user's Steam profile; storeStats flushes
+		# to the Steam backend so other clients see it promptly. Note:
+		# setAchievement takes 1 arg in GodotSteam 4.20 (unlock only —
+		# there's no clearAchievement-toggle in this binding).
+		Steam.setAchievement(ACHIEVEMENT_IDS[id])
+		Steam.storeStats()
 	print("[Steam] achievement unlocked: %s" % id)
 	return true
 
@@ -85,10 +84,15 @@ func cloud_write(filename: String, data: PackedByteArray) -> bool:
 		push_warning("Steamworks.cloud_write: empty filename")
 		return false
 	if _enabled:
-		# Real call: Steam.fileWrite(filename, data)
-		pass
+		# GodotSteam 4.20 / Steamworks 1.64. fileWrite takes (file, data, size)
+		# — passing data.size() so the binding forwards the full payload.
+		# Returns false if Steam Cloud is disabled for the app or the user
+		# is in Offline mode.
+		var ok: bool = Steam.fileWrite(filename, data, data.size())
+		print("[Steam] cloud_write: %s (%d bytes, ok=%s)" % [filename, data.size(), ok])
+		return ok
 	print("[Steam] cloud_write stub: %s (%d bytes)" % [filename, data.size()])
-	return true  # always succeed for now
+	return true  # stub mode: always succeed
 
 
 func cloud_read(filename: String) -> PackedByteArray:
@@ -96,8 +100,20 @@ func cloud_read(filename: String) -> PackedByteArray:
 		push_warning("Steamworks.cloud_read: empty filename")
 		return PackedByteArray()
 	if _enabled:
-		# Real call: Steam.fileRead(filename)
-		pass
+		# GodotSteam 4.20 / Steamworks 1.64. fileRead takes (file, bytes_to_read)
+		# — bytes_to_read must be set explicitly. Look it up via getFileSize
+		# first; -1 means file missing on Cloud, return empty.
+		var fsize: int = Steam.getFileSize(filename)
+		if fsize <= 0:
+			print("[Steam] cloud_read: %s not found on Cloud (size=%d)" % [filename, fsize])
+			return PackedByteArray()
+		var result: Dictionary = Steam.fileRead(filename, fsize)
+		if bool(result.get("ret", false)):
+			var got: PackedByteArray = result.get("data", PackedByteArray())
+			print("[Steam] cloud_read: %s (%d bytes)" % [filename, got.size()])
+			return got
+		print("[Steam] cloud_read failed: %s" % filename)
+		return PackedByteArray()
 	print("[Steam] cloud_read stub: %s" % filename)
 	return PackedByteArray()
 
@@ -106,10 +122,12 @@ func cloud_read(filename: String) -> PackedByteArray:
 
 func set_rich_presence(state: String) -> void:
 	if _enabled:
-		# Real call: Steam.setRichPresence("steam_display", state)
-		pass
-	# In headless / stub mode this is a no-op. We still update the local
-	# state so tests can verify the call was made.
+		# GodotSteam 4.20 / Steamworks 1.64. setRichPresence under the
+		# "steam_display" key shows up in the user's Friends list as their
+		# current activity ("旧体育馆守夜 · 第 N 夜" etc.).
+		Steam.setRichPresence("steam_display", state)
+	# Always update the local state so tests can verify the call was made
+	# regardless of whether the Steam backend is reachable.
 	_rich_presence_state = state
 
 

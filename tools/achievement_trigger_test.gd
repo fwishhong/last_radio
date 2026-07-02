@@ -79,7 +79,9 @@ func _run() -> void:
 	await process_frame
 	game.call("_on_start_pressed")
 	game.call("_on_day_card_pressed", "start")
-	await process_frame
+	# _on_day_card_pressed is async (await _fade_out + _show_night +
+	# _fade_in); one process_frame isn't enough — wait for the fade.
+	await create_timer(0.3).timeout
 	_assert(game.phase == "night", "entered night 1 (phase=%s)" % game.phase)
 
 	# Reset the game-side single-fire flags so we can re-exercise them in
