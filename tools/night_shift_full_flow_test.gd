@@ -234,3 +234,6 @@ func _patch_safe_night() -> void:
 	game.radio_available = false
 	game.radio_completed = true
 	game.radio_missed = false
+	# Polish M14: every night now starts paused while the CG overlay
+	# is up. Tests that drive _update_night directly must clear it.
+	game.night_paused = false

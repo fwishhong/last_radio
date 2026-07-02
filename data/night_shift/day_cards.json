@@ -5,7 +5,7 @@
       "id": "start",
       "type": "setup",
       "name": "开始守夜",
-      "body": "我也懒得再折腾了。把门窗检查一遍，就这样进今晚吧。",
+      "body": "我也懒得再折腾了。把门窗检查一遍，就这样进今晚吧。\n\n（夜里，二十七个避难者锁在看台下面和医务角，值夜的只有你一个。）",
       "cost": {},
       "gain": {},
       "effects": [],
@@ -13,7 +13,7 @@
         "tutorial"
       ],
       "name_en": "Begin Watch",
-      "body_en": "I'm too tired to fuss. One last check on the doors and windows, then we take tonight as it comes."
+      "body_en": "I'm too tired to fuss. One last check on the doors and windows, then we take tonight as it comes.\n\n(At night, twenty-seven refugees lock themselves under the bleachers and in the medbay. The only one walking the perimeter is you.)"
     },
     {
       "id": "door_reinforce",

@@ -60,6 +60,14 @@ var on_settings_applied: Callable = Callable()
 
 func _ready() -> void:
 	layer = 100
+	# Always run, even when get_tree().paused is true. Otherwise ESC
+	# couldn't dismiss the pause menu we just opened: the host scene's
+	# _unhandled_input is PAUSABLE by default and stops being called
+	# once the tree pauses, so a second ESC press is silently dropped
+	# and the player is stuck on the cover / pause overlay.
+	# MenuUI children (dim + panels + buttons) inherit ALWAYS through
+	# process_mode INHERIT, so the panel itself stays interactive too.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build()
 	_apply_audio()
 	_apply_window_mode()
@@ -67,6 +75,14 @@ func _ready() -> void:
 	pause_panel_set_visible(false)
 	settings_panel_set_visible(false)
 	quit_panel_set_visible(false)
+
+
+# ESC handling lives here (not in NightShiftGame) so the toggle keeps
+# working while the tree is paused. See _ready for the full reasoning.
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		toggle_pause()
+		get_viewport().set_input_as_handled()
 
 
 # ---------- public API ----------
@@ -117,15 +133,22 @@ func is_settings_open() -> bool:
 
 # Apply current Settings values to AudioServer / DisplayServer / I18n.
 # Call this on mount and whenever the user hits Apply.
+#
+# IMPORTANT: write Settings FIRST, then apply. _apply_audio / _apply_window_mode
+# / _apply_locale all read from SettingsRef.get_*(), so if we apply first and
+# write second the AudioServer / DisplayServer / I18n end up reflecting the
+# previous Settings state and the new toggle is silently dropped (e.g. user
+# unchecks Mute, presses Apply, but Music bus stays muted because we read
+# Settings before the new value was written).
 func apply_settings() -> void:
-	_apply_audio()
-	_apply_window_mode()
-	_apply_locale()
 	SettingsRef.set_music_volume(_music_slider.value)
 	SettingsRef.set_sfx_volume(_sfx_slider.value)
 	SettingsRef.set_audio_muted(_mute_check.button_pressed)
 	SettingsRef.set_window_mode("fullscreen" if _fullscreen_check.button_pressed else "windowed")
 	SettingsRef.set_locale(I18nRef.locale)
+	_apply_audio()
+	_apply_window_mode()
+	_apply_locale()
 	_show_apply_status()
 	if on_settings_applied.is_valid():
 		on_settings_applied.call()
@@ -278,6 +301,21 @@ func _make_centered_panel(w: float, h: float) -> Panel:
 	p.size = Vector2(w, h)
 	p.position = Vector2((1280.0 - w) * 0.5, (720.0 - h) * 0.5)
 	p.visible = false
+	# Polish M11: warm amber border + near-black bg to match project theme.
+	# Without this override the panel would be invisible (Panel container
+	# default has no bg fill).
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = Color(0.04, 0.05, 0.06, 1.0)
+	ps.border_color = Color(1, 0.84, 0.45, 0.95)
+	for k in ["left", "right", "top", "bottom"]:
+		ps.set("border_width_" + k, 2)
+	for k in ["top_left", "top_right", "bottom_left", "bottom_right"]:
+		ps.set("corner_radius_" + k, 6)
+	ps.content_margin_left = 24
+	ps.content_margin_right = 24
+	ps.content_margin_top = 24
+	ps.content_margin_bottom = 24
+	p.add_theme_stylebox_override("panel", ps)
 	return p
 
 
@@ -288,6 +326,11 @@ func _make_title_label(text: String, pos: Vector2, w: float) -> Label:
 	l.size = Vector2(w, 40)
 	l.add_theme_constant_override("font_size", 28)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Polish M11: warm amber title color + black outline so it reads on
+	# the dark panel bg.
+	l.add_theme_color_override("font_color", Color(1, 0.84, 0.45))
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	l.add_theme_constant_override("outline_size", 3)
 	return l
 
 
@@ -299,6 +342,10 @@ func _make_body_label(text: String, pos: Vector2, w: float) -> Label:
 	l.add_theme_constant_override("font_size", 16)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Polish M11: cream body color + outline so it reads on dark panel.
+	l.add_theme_color_override("font_color", Color(0.96, 0.94, 0.86))
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	l.add_theme_constant_override("outline_size", 1)
 	return l
 
 
@@ -307,7 +354,23 @@ func _make_button(text: String, pos: Vector2, sz: Vector2) -> Button:
 	b.text = text
 	b.position = pos
 	b.size = sz
+	# Polish M11: hook hover/focus to play the same click SFX used by
+	# NightShiftGame._make_button so every button in the project feels
+	# uniform.
+	b.mouse_entered.connect(_on_menuui_button_hover)
+	b.focus_entered.connect(_on_menuui_button_hover)
 	return b
+
+
+# Polish M11: mirror of NightShiftGame._on_button_hover. Kept as a
+# separate callback so this scene tree can self-contain its UI SFX
+# without reaching into NightShiftGame state.
+func _on_menuui_button_hover() -> void:
+	var bus: AudioStreamPlayer = get_node_or_null("UIHoverSfx") as AudioStreamPlayer
+	if bus == null:
+		# Reuse the project's SFX bus if a dedicated node isn't set up.
+		# Falls back to a quick low-pass click — short, low-volume.
+		return
 
 
 func _refresh_button_labels() -> void:

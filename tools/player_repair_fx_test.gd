@@ -134,15 +134,21 @@ func _initialize() -> void:
 		printerr("[FAIL] scale at phase=0 should be (1,1), got %s" % str(sc0))
 		fail_count += 1
 
-	# Test 15: is_repairable_hotspot returns true for barrier
+	# Test 15: is_repairable_hotspot returns true for barrier AND generator
+	# (round-3 visual fix: generator gets the hammer cycle too)
 	if PlayerRepairFxScript.is_repairable_hotspot("barrier"):
 		pass_count += 1
 	else:
 		printerr("[FAIL] 'barrier' should be repairable")
 		fail_count += 1
+	if PlayerRepairFxScript.is_repairable_hotspot("generator"):
+		pass_count += 1
+	else:
+		printerr("[FAIL] 'generator' should be repairable (round-3 fix)")
+		fail_count += 1
 
-	# Test 16: is_repairable_hotspot returns false for radio/medbay/generator/antenna/support
-	for k in ["radio", "medbay", "generator", "antenna", "support", ""]:
+	# Test 16: is_repairable_hotspot returns false for radio/medbay/antenna/support
+	for k in ["radio", "medbay", "antenna", "support", ""]:
 		if not PlayerRepairFxScript.is_repairable_hotspot(k):
 			pass_count += 1
 		else:

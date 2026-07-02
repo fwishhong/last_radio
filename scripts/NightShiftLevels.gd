@@ -8,8 +8,8 @@ const LEVELS := [
 		"title_en": "Night 1: Three Lights",
 		"briefing": "教学夜只守正门、左窗和发电机。活到天亮，Nora 会留下。",
 		"briefing_en": "Tutorial night: hold the front door, left window, and generator. Survive until dawn and Nora will stay.",
-		"story_intro": "白天，你把临时电接进旧体育馆。看台下面躲着二十七个人，所有人都盯着三处还亮着的地方：正门、左窗、发电机。Nora 没有进屋，她说如果你撑到天亮，她就信这里不是又一个会熄灭的地方。",
-		"story_intro_en": "During the day you wired temporary power into the old stadium. Twenty-seven people huddle under the bleachers, all staring at the three places still lit: the front door, the left window, the generator. Nora is still outside the window. She says if you last until dawn she will believe this is not another place that goes dark.",
+		"story_intro": "白天，你把临时电接进旧体育馆。看台下面躲着二十七个人，所有人都盯着三处还亮着的地方：正门、左窗、发电机。\n\n夜里他们锁在看台下和医务角，值夜的只有你一个人——Nora 在窗外，她说如果你撑到天亮，她就信这里不是又一个会熄灭的地方。",
+		"story_intro_en": "During the day you wired temporary power into the old stadium. Twenty-seven people huddle under the bleachers, all staring at the three places still lit: the front door, the left window, the generator.\n\nAt night they lock themselves under the bleachers and in the medbay — the only one walking the perimeter is you. Nora is still outside the window. She says if you last until dawn she will believe this is not another place that goes dark.",
 		"night_goal": "只守住正门、左窗、发电机。学会移动、修复和判断先后。",
 		"night_goal_en": "Only hold the front door, the left window, and the generator. Learn to move, repair, and judge priorities.",
 		"story_start": [

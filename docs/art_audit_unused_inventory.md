@@ -4,6 +4,12 @@
 > disguised the fact that some assets were wired-up work and others
 > were concept art that may not ship. This doc splits them into four
 > tiers by what would actually happen if you touched them.
+>
+> **2026-06-27 update**: added a new Tier 2 "Story CG" entry — 11
+> cinematic keyframes shipped this PR and wired up to
+> `NightShiftGame._start_night` via the new `NightCGOverlay` (see
+> `scripts/NightCGOverlay.gd`). These are NOT unused anymore; they
+> show at the top of every chapter 1 night before the loop ticks.
 
 ## Tier summary
 
@@ -14,8 +20,9 @@
 | 🟡 Wiring | 2 hud/upgrade_frame | Replace procedural StyleBox | Later |
 | 🟢 Decide | 4 threat + 1 vignette + 4 radio | Needs design call | After playtesting |
 | ⚫ Drop | 7 overlays/waveform/shadows | Probably drop | Polish pass |
+| 🟢 Story CG | 11 cg_*.png | Wired to per-night overlay | Done this PR |
 
-Total: 33 art files (was 47 — accounting error in the old doc).
+Total: 44 art files (was 33 pre-CG; added 11 cinematic keyframes).
 
 ---
 
@@ -153,6 +160,62 @@ serve different framing needs. Keep both.
 - [ ] (Tier 3) Capture radio state art proof or delete the 4 PNGs
 - [ ] (Tier 3) Decide whether threat_*.png + atmosphere_vignette ship
 - [ ] (Tier 4) Eventually drop overlay/waveform/zombie_shadow PNGs
+
+## 🟢 Tier 2 — Story CG (done this PR)
+
+### `cg_*.png` — 11 cinematic keyframes, 1920×1072 each
+
+Located at `assets/final/night_shift/cg/`. Generated 2026-06-26/27
+via matrix MCP. Style: cinematic digital painting, warm amber key +
+cold blue ambient, post-apocalyptic but not despairing — aligned
+with `stadium_room_day.png`. Aspect 16:9, 2K.
+
+**Wiring**: each night in `data/night_shift/chapter_01_nights.json`
+gained a `cg_image` field pointing to one of these PNGs (night 6 is
+intentionally null — no dedicated keyframe for that beat yet).
+`NightShiftGame._start_night()` reads the field, shows the overlay
+via the new `NightCGOverlay` (CanvasLayer at z=60), and sets
+`night_paused = true` until the player clicks "开始守夜" (zh) /
+"Begin the night" (en). `_process` early-returns when paused so the
+night loop doesn't tick while the keyframe is up.
+
+| File | Size | Night | Story beat |
+|---|---|---|---|
+| `cg_prologue_radio_dawn.png` | 2.6 MB | (intro) | Opening: protagonist at the radio at first light |
+| `cg_night01_three_lights.png` | 2.6 MB | 1 | "三盏灯" — three lights held alone |
+| `cg_night02_nora_window.png` | 2.5 MB | 2 | Nora seen at the right window for the first time |
+| `cg_night02_nora_enters.png` | 5.0 MB | 2 (end) | Reserved for future mid-night event trigger |
+| `cg_night03_signal_received.png` | 2.9 MB | 3 | "接住声音" — radio speaks a full name (Elias) |
+| `cg_night04_elias_rooftop.png` | 2.6 MB | 4 | "屋顶的线" — Elias on the roof fixing the antenna |
+| `cg_night05_exposure.png` | 5.1 MB | 5 | "白天不安全" — antenna light draws both survivors and the dead |
+| `cg_night07_nora_lantern.png` | 2.3 MB | 7 | "医务角的灯" — Nora brings back a feverish girl |
+| `cg_night08_tom_farewell.png` | 2.7 MB | 8 | "最后一块板" — Tom's last stand |
+| `cg_night09_victor_silent.png` | 2.7 MB | 9 | "有人在追信号" — Victor's frequency goes silent |
+| `cg_night10_the_list.png` | 2.6 MB | 10 | "名单" — the broadcast opens with a roll call |
+
+**Bug found during this PR**: `NightShiftGame._start_night()` was
+reading `level.story_start` / `story_start_en` — neither field exists
+on `NightShiftLevels.LEVELS`; the real keys are `story_intro` /
+`story_intro_en`. Every night was falling back to a "第 N 夜开始"
+stub and the writer's blurb was never displayed. Fixed by reading
+the correct field names; same code path now feeds the CG overlay's
+bubble text.
+
+**Bug found during import pass**: matrix MCP returned 9 of the 11
+PNGs as JPEG (header `FF D8 FF E1`) under a `.png` filename. Godot
+4.3 rejected them with `ERR_FILE_CORRUPT`. Resolved with a one-shot
+Pillow re-encode (`im.save(path, 'PNG')`); import pass then generated
+`.ctex` + `.png.import` correctly. Captured in the inline comment
+on the convert script; will happen again if matrix's output format
+defaults change.
+
+**Regression test**: `tools/night_cg_overlay_test.gd` — 85
+assertions covering field presence on every night (including night
+6's null), file existence + `.png.import` sibling on every wired
+path, `NightCGOverlay.start / dismiss / is_active` lifecycle, and
+`night_paused` flag toggling.
+
+---
 
 ## Files consumed this PR (no longer "unused")
 

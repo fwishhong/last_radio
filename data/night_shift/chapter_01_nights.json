@@ -26,7 +26,8 @@
       "success_unlocks": ["nora", "right_window"],
       "resource_stage": "hidden",
       "radio_channels": null,
-      "radio_target_channel": null
+      "radio_target_channel": null,
+      "cg_image": "res://assets/final/night_shift/cg/cg_night01_three_lights.png"
     },
     {
       "id": "night_02",
@@ -42,7 +43,8 @@
         {"id": "left_window_echo", "time": 72, "type": "warning", "target": "left_window"}
       ],
       "success_unlocks": ["radio"],
-      "resource_stage": "hidden"
+      "resource_stage": "hidden",
+      "cg_image": "res://assets/final/night_shift/cg/cg_night02_nora_window.png"
     },
     {
       "id": "night_03",
@@ -64,7 +66,8 @@
         {"id": "elias", "label": "Elias", "desc": "新人 Elias 的微弱信号"},
         {"id": "static", "label": "干扰", "desc": "只有噪声，没人在说话"}
       ],
-      "radio_target_channel": "elias"
+      "radio_target_channel": "elias",
+      "cg_image": "res://assets/final/night_shift/cg/cg_night03_signal_received.png"
     },
     {
       "id": "night_04",
@@ -86,7 +89,8 @@
         {"id": "elias", "label": "Elias", "desc": "在测试新天线"},
         {"id": "static", "label": "干扰", "desc": "有人在反向扫描"}
       ],
-      "radio_target_channel": "victor"
+      "radio_target_channel": "victor",
+      "cg_image": "res://assets/final/night_shift/cg/cg_night04_elias_rooftop.png"
     },
     {
       "id": "night_05",
@@ -102,7 +106,8 @@
         {"id": "late_push", "time": 104, "type": "director", "target": "barrier"}
       ],
       "success_unlocks": ["back_door", "lily", "daniel"],
-      "resource_stage": "visible"
+      "resource_stage": "visible",
+      "cg_image": "res://assets/final/night_shift/cg/cg_night05_exposure.png"
     },
     {
       "id": "night_06",
@@ -118,7 +123,8 @@
         {"id": "generator_drag", "time": 76, "type": "support", "target": "generator", "pressure": 1.4}
       ],
       "success_unlocks": ["medbay", "tom"],
-      "resource_stage": "visible"
+      "resource_stage": "visible",
+      "cg_image": null
     },
     {
       "id": "night_07",
@@ -133,7 +139,8 @@
         {"id": "window_pair", "time": 82, "type": "assault", "target": "windows", "pressure": 3.6}
       ],
       "success_unlocks": ["storage"],
-      "resource_stage": "medicine_trust"
+      "resource_stage": "medicine_trust",
+      "cg_image": "res://assets/final/night_shift/cg/cg_night07_nora_lantern.png"
     },
     {
       "id": "night_08",
@@ -150,7 +157,8 @@
         {"id": "tom_death", "time": 110, "type": "npc_loss", "target": "tom", "trust_delta": -1.0}
       ],
       "success_unlocks": ["exposure_backlash"],
-      "resource_stage": "plank_stock"
+      "resource_stage": "plank_stock",
+      "cg_image": "res://assets/final/night_shift/cg/cg_night08_tom_farewell.png"
     },
     {
       "id": "night_09",
@@ -172,7 +180,8 @@
         {"id": "elias", "label": "Elias", "desc": "他还在，但声音断断续续。"},
         {"id": "static", "label": "干扰", "desc": "追踪者开始反向扫描"}
       ],
-      "radio_target_channel": "victor"
+      "radio_target_channel": "victor",
+      "cg_image": "res://assets/final/night_shift/cg/cg_night09_victor_silent.png"
     },
     {
       "id": "night_10",
@@ -194,7 +203,8 @@
         {"id": "elias", "label": "Elias", "desc": "在同步坐标"},
         {"id": "static", "label": "干扰", "desc": "追踪者压过来"}
       ],
-      "radio_target_channel": "victor"
+      "radio_target_channel": "victor",
+      "cg_image": "res://assets/final/night_shift/cg/cg_night10_the_list.png"
     }
   ]
 }

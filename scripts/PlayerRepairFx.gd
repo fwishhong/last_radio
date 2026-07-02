@@ -18,10 +18,13 @@ const REPAIR_FRAME_END := 2
 const REPAIR_FRAME_COUNT := 3
 
 # Cycle period for one full swing (start -> mid -> end -> start).
-# Tuned so it reads as a fast, urgent hammering rhythm; the existing
-# REPAIR_RATE in NightShiftGame gives ~1s per +0.05 value bar, so a
-# 0.36s cycle means ~3 swings per repair bar.
-const REPAIR_CYCLE_SEC := 0.36
+# Tuned for a deliberate, weighty hammer rhythm: a 0.7s cycle yields
+# ~1.4 swings per repair bar (REPAIR_RATE in NightShiftGame gives ~1s
+# per +0.05 value bar). Round-5 visual fix per user feedback: the
+# round-4 0.36s cycle read as frantic / jittery; slowing to 0.7s
+# makes each strike land with a clear beat and the recovery arc
+# becomes visible instead of blurring into the next swing.
+const REPAIR_CYCLE_SEC := 0.7
 
 # How much the body should bob / lean during the swing, in pixels.
 # Subtle so it reads as animation rather than as separate sprites
@@ -68,7 +71,8 @@ static func repair_scale_for(timer: float) -> Vector2:
 
 
 # Helper: is a hotspot the kind that triggers repair animation?
-# Only "barrier" (door / window) hotspots take player repair ticks.
-# Radio and medbay have their own interaction flows.
+# Round-3 visual fix: also include "generator" so the player sees a
+# hammer swing when restoring power. Radio and medbay have their own
+# interaction flows (radio tuning / heal animations, not hammer).
 static func is_repairable_hotspot(kind: String) -> bool:
-	return kind == "barrier"
+	return kind == "barrier" or kind == "generator"

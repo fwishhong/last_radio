@@ -162,10 +162,16 @@ func _build() -> void:
 	_skip_btn.pressed.connect(skip)
 	add_child(_skip_btn)
 
-	# Bubble at the bottom center
+	# Bubble at the TOP center. Earlier this lived at the bottom of the
+	# screen and overlapped the player sprite + the day card row, which
+	# blocked the tutorial from showing the very thing it was teaching.
+	# Top-center sits clear of player (mid-screen), hotspot rings (mid-screen),
+	# and the day card row (bottom). Status label (top-left, ~24x40) is
+	# horizontally separate from the bubble's left edge (BUBBLE_W centered
+	# → x_start = (1280-720)/2 = 280).
 	_bubble = Panel.new()
 	_bubble.size = Vector2(BUBBLE_W, BUBBLE_H)
-	_bubble.position = Vector2((1280.0 - BUBBLE_W) * 0.5, 720.0 - BUBBLE_H - 32.0)
+	_bubble.position = Vector2((1280.0 - BUBBLE_W) * 0.5, 28.0)
 	_bubble.visible = false
 	add_child(_bubble)
 

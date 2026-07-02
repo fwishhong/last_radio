@@ -104,14 +104,50 @@ func _run() -> void:
 	_assert(max_drift_d2 > max_drift_d0, "deeper parallax drifts more (d0=%.2f d2=%.2f)" % [max_drift_d0, max_drift_d2])
 
 	# ---- 8) Anchor offsets match hotspot type ---------------------------
+	# Round-4 fix: zombie stands on the OUTSIDE of the door / window,
+	# partially off-screen — the silhouette reads as "peering in from
+	# outside" rather than "haunting inside the room". Direction:
+	#   - doors: negative-Y (zombie stands above the hotspot, outside)
+	#   - left_window: negative-X (zombie stands to the left, outside)
+	#   - right_window: positive-X (zombie stands to the right, outside)
 	var front: Vector2 = WorldFx.zombie_anchor_offset("front_door")
 	var back: Vector2 = WorldFx.zombie_anchor_offset("back_door")
 	var lw: Vector2 = WorldFx.zombie_anchor_offset("left_window")
 	var rw: Vector2 = WorldFx.zombie_anchor_offset("right_window")
-	_assert(front.y < 0.0 and abs(front.x) < 0.01, "front_door anchor goes UP (got %s)" % str(front))
-	_assert(back.y < 0.0 and abs(back.x) < 0.01, "back_door anchor goes UP (got %s)" % str(back))
-	_assert(lw.x < 0.0, "left_window anchor goes LEFT (got %s)" % str(lw))
-	_assert(rw.x > 0.0, "right_window anchor goes RIGHT (got %s)" % str(rw))
+	_assert(front.y < 0.0 and abs(front.x) < 0.01, "front_door anchor goes UP (outside the door, got %s)" % str(front))
+	_assert(back.y < 0.0 and abs(back.x) < 0.01, "back_door anchor goes UP (outside the door, got %s)" % str(back))
+	_assert(lw.x < 0.0, "left_window anchor goes LEFT (outside the window, got %s)" % str(lw))
+	_assert(rw.x > 0.0, "right_window anchor goes RIGHT (outside the window, got %s)" % str(rw))
+	# Round-4 regression guard: anchor + half-texture bbox must be on the
+	# OUTSIDE side of the hotspot AND must overlap the 1280x720 screen
+	# rect by at least 80 px (so the player can still read the silhouette).
+	# Texture is 1434x1920 at scale 0.18 → half-width 129, half-height 173.
+	var hotspots_pos := {
+		"front_door": Vector2(640, 85),
+		"back_door": Vector2(1000, 80),
+		"left_window": Vector2(270, 250),
+		"right_window": Vector2(1080, 200),
+	}
+	for id in hotspots_pos:
+		var center: Vector2 = hotspots_pos[id] + WorldFx.zombie_anchor_offset(id)
+		var bbox := Rect2(
+			center - Vector2(129.0, 173.0),
+			Vector2(258.0, 346.0)
+		)
+		var screen := Rect2(Vector2.ZERO, Vector2(1280.0, 720.0))
+		var visible: bool = bbox.intersects(screen)
+		_assert(visible, "zombie bbox for %s overlaps the 1280x720 screen (centre %s, bbox %s)" % [id, str(center), str(bbox)])
+		# Belt-and-braces: at least 80px of vertical OR horizontal
+		# silhouette must remain on-screen, otherwise the sprite reads
+		# as fully outside (the round-1 -260/-280 bug).
+		var vis_rect: Rect2 = bbox.intersection(screen)
+		var on_screen_h: float = vis_rect.size.x
+		var on_screen_v: float = vis_rect.size.y
+		var min_visible: float = 80.0
+		_assert(
+			on_screen_h >= min_visible or on_screen_v >= min_visible,
+			"zombie bbox for %s shows at least 80px on screen (got h=%.1f v=%.1f)" % [id, on_screen_h, on_screen_v]
+		)
 
 	print("WorldLayerFx module test: %s (passed=%d, failed=%d)" % [
 		"PASS" if failed == 0 else "FAIL", passed, failed

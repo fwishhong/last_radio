@@ -104,23 +104,44 @@ static func parallax_offset(phase: float, depth: int, magnitude: float = 8.0) ->
 	)
 
 
-# Per-hotspot anchor offset for the zombie sprite. Doors have the zombie
-# standing above the hotspot (the body hangs down INTO the door area from
-# outside, off the top of the screen). Windows have the zombie standing
-# to the side (left/right off-screen, body extends INTO the window).
-# `kind` is the HOTSPOT_KIND value: "barrier" + sub-kind "door" or
-# "window".
+# Per-hotspot anchor offset for the zombie sprite.
+# Round-4 visual fix: zombie stands on the OUTSIDE of the door/window,
+# partially off-screen, so the silhouette reads as "standing outside
+# the door / peering through the broken window" rather than "haunting
+# inside the room". Round-1 used offsets of -260 / +/-280 which pushed
+# the sprite fully off-screen (nothing to read); round-3 inverted the
+# direction (+130 / +/-200) and ended up with the zombie inside the
+# room — user feedback: "僵尸要在画面里,不在屋里,要在门口,及窗口".
+# Round-4 keeps the round-1 OUTSIDE direction but shrinks the magnitude
+# so the bottom / inner half of the body remains on screen.
+#
+# Zombie texture is 1434x1920 at scale 0.18 → ~258x346 px on screen
+# (half-width 129, half-height 173). On-screen coverage for each anchor:
+#
+#   front_door  (640, 85)  + (0,   -120) → centre (640, -35)
+#     body y ∈ [-208, 138]; visible [0, 138] (138px ≈ waist-down).
+#   back_door   (1000, 80) + (0,   -120) → centre (1000, -40)
+#     body y ∈ [-213, 133]; visible [0, 133].
+#   left_window (270, 250) + (-150, 0)  → centre (120, 250)
+#     body x ∈ [-9, 249]; visible [-9..129] exits on the left edge,
+#     right half [120, 249] stays in.
+#   right_window(1080, 200)+ (150, 0)  → centre (1230, 200)
+#     body x ∈ [1101, 1359]; left half stays in, right edge exits.
 static func zombie_anchor_offset(hotspot_id: String) -> Vector2:
-	# Doors: zombie body sits ABOVE the hotspot — feet around hotspot.y,
-	# head extends upward off-screen.
+	# Doors: zombie stands ABOVE the hotspot (outside the door, in the
+	# dark beyond the top wall). Top half of the body exits the screen,
+	# the bottom half hangs into view from above the door.
 	if hotspot_id == "front_door":
-		return Vector2(0.0, -260.0)
+		return Vector2(0.0, -120.0)
 	if hotspot_id == "back_door":
-		return Vector2(0.0, -250.0)
-	# Windows: zombie stands to the SIDE of the hotspot.
+		return Vector2(0.0, -120.0)
+	# Windows: zombie stands to the OUTSIDE side of the window. Half
+	# the body exits the screen on the window's outer edge, the inner
+	# half remains in view (zombie leaning in / peering through the
+	# broken pane).
 	if hotspot_id == "left_window":
-		return Vector2(-280.0, 0.0)
+		return Vector2(-150.0, 0.0)
 	if hotspot_id == "right_window":
-		return Vector2(280.0, 0.0)
-	# Fallback (any other barrier hotspot — above)
-	return Vector2(0.0, -200.0)
+		return Vector2(150.0, 0.0)
+	# Fallback (any other barrier hotspot) — outside the door / window
+	return Vector2(0.0, -120.0)

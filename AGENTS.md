@@ -2,26 +2,26 @@
 
 Last Radio: Old Stadium Watch / 末日电台：旧体育馆守夜 — a 10-night resource-and-positioning
 defense game set in an abandoned stadium on the edge of a dead city. Solo-developed
-Godot 4.3-stable GDScript project targeting Steam release (zh/en, 18 RMB, single chapter).
+Godot 4.7-stable GDScript project targeting Steam release (zh/en, 18 RMB, single chapter).
 
 ## Setup commands
 
-- Open project: launch Godot 4.3-stable editor, **Import** this folder, then **Project Manager → Edit**.
-  Verified binary paths: `C:\Users\Administrator\godot_console.exe` and
-  `D:\迅雷下载\Godot_v4.3-stable_win64.exe`. `project.godot` declares `features=4.6` but
-  the project is verified on 4.3-stable; the API surface used is compatible.
+- Open project: launch Godot 4.7-stable editor, **Import** this folder, then **Project Manager → Edit**.
+  Verified binary path: `C:\Users\Administrator\Desktop\codex\Godot_v4.7-stable_win64_console.exe`.
+  `project.godot` declares `features=4.7` and the project is verified on 4.7-stable; the
+  API surface used is compatible.
 - Run game (windowed):  `godot_console.exe --path .`
 - Run game (headless):   `godot_console.exe --headless --path .`
-- Run all headless tests (19 suites, ~593 assertions — the canonical regression gate):
+- Run all headless tests (20 suites, ~636 assertions — the canonical regression gate):
   ```powershell
-  $exe = "C:\Users\Administrator\godot_console.exe"
+  $exe = "C:\Users\Administrator\Desktop\codex\Godot_v4.7-stable_win64_console.exe"
   foreach ($t in @(
       "save_test","sfx_test","flow_integration_test","night_shift_basic_test",
       "night_shift_data_validate","hotspot_dot_test","day_effects_test",
       "late_hotspot_enemy_test","night_report_stats_test","radio_contact_test",
       "night_shift_full_flow_test","signal_catalog_test","menu_ui_test",
       "save_slots_test","tutorial_test","i18n_test","locale_e2e_test",
-      "night_shift_fx_test","ampersand_lint_test"
+      "night_shift_fx_test","ampersand_lint_test","hud_time_chip_test"
   )) { & $exe --headless --path . --script "res://tools/$t.gd" }
   ```
   `ampersand_lint_test` is a defensive CI gate — fails if any `.gd` file under

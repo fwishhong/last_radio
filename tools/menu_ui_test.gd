@@ -37,6 +37,17 @@ func _wait() -> void:
 	OS.delay_msec(50)
 
 
+# Build a synthetic ESC InputEventAction for the ui_cancel action. We use
+# this to drive the MenuUI._unhandled_input path directly in tests so we
+# can verify the ESC-during-pause round trip without depending on
+# SceneTree input dispatch (which is itself blocked when paused).
+func _make_cancel_event() -> InputEventAction:
+	var ev := InputEventAction.new()
+	ev.action = "ui_cancel"
+	ev.pressed = true
+	return ev
+
+
 func _run() -> void:
 	print("=== MenuUI test ===")
 
@@ -137,6 +148,37 @@ func _run() -> void:
 	menu.toggle_pause()
 	await _wait()
 	_assert(menu.is_paused(), "toggle_pause state machine works")
+
+	# 12) Regression: ESC must dismiss the pause menu even when the
+	# SceneTree is paused. Earlier the handler lived on NightShiftGame
+	# (PAUSABLE by default), so once `get_tree().paused = true` the
+	# second ESC never reached toggle_pause() and the player got stuck
+	# on the cover / pause overlay. The fix moves the handler to
+	# MenuUI and forces process_mode = ALWAYS so it keeps receiving
+	# _unhandled_input during pause.
+	_assert(menu.process_mode == Node.PROCESS_MODE_ALWAYS,
+		"MenuUI.process_mode is ALWAYS so _unhandled_input fires while paused")
+	# ESC via _unhandled_input while paused -> menu closes
+	menu._unhandled_input(_make_cancel_event())
+	await _wait()
+	_assert(not menu.is_paused(), "ESC via _unhandled_input closes pause menu while tree is paused")
+	_assert(not menu.get_tree().paused, "tree unpaused by ESC during pause")
+	# Re-open and try again to make sure it's not a one-shot
+	menu.toggle_pause()
+	await _wait()
+	_assert(menu.is_paused(), "reopen works after ESC-during-pause")
+	menu._unhandled_input(_make_cancel_event())
+	await _wait()
+	_assert(not menu.is_paused(), "ESC-during-pause works on a second round trip")
+	# ESC while NOT paused should still toggle open (toggle_pause is
+	# bidirectional, not a pause-only toggle). Confirms the handler
+	# doesn't gate on tree.paused.
+	menu._unhandled_input(_make_cancel_event())
+	await _wait()
+	_assert(menu.is_paused(), "ESC while not paused opens pause menu (toggle is bidirectional)")
+	menu._unhandled_input(_make_cancel_event())
+	await _wait()
+	_assert(not menu.is_paused(), "ESC while not paused can also close the menu it just opened")
 
 	menu.queue_free()
 

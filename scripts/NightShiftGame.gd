@@ -13,6 +13,7 @@ const Fx := preload("res://scripts/NightShiftFx.gd")
 const FxLayer := preload("res://scripts/FxLayerNode.gd")
 const WorldFx := preload("res://scripts/WorldLayerFx.gd")
 const PlayerRepairFx := preload("res://scripts/PlayerRepairFx.gd")
+const HammerSpriteScript := preload("res://scripts/HammerSprite.gd")
 
 # Effect tuning knobs. The two "lead time" / "grace" knobs are defaults —
 # runtime values come from difficulty_modifiers so casual/hard/custom
@@ -112,7 +113,15 @@ var phase: String = "cover"
 var night_index: int = 0  # 0..9
 var night_elapsed: float = 0.0
 var night_duration: float = 0.0
+# Narrative title of the current night (e.g. "三盏灯" / "Three Lights"),
+# pulled from chapter_01_nights.json. Class-level so the per-frame
+# _update_time_chip can show it without re-reading the dict every tick.
+var night_title: String = ""
 var survived: bool = false
+# Polish: while the per-night CG keyframe is showing, the night loop
+# must NOT tick. _update_night early-returns on this flag; the CG
+# overlay's on_dismissed callback clears it.
+var night_paused: bool = false
 
 # Per-night mutable state
 var hotspots: Dictionary = {}  # id -> {kind, value, pressure, active, warning, assault, breach_timer}
@@ -155,6 +164,11 @@ var upgrades: Dictionary = {}  # {card_id: true}
 var day_effects: NightShiftDayEffects = NightShiftDayEffects.new()
 var logs: Array = []  # recent log lines (max 6)
 var allies: Dictionary = {"nora": false, "elias": false, "victor": true}
+# Shelter population under the bleachers / medbay. Starts at 27 (per the
+# night-1 CG: "看台下面躲着二十七个人"). The number itself is read-only
+# for chapter 1 (no rescue accumulation mechanic yet); future chapters
+# can promote this to a tracked save field without breaking the HUD chip.
+var night_refugees: int = 27
 var radio_available: bool = false
 var radio_completed: bool = false
 var radio_missed: bool = false
@@ -228,10 +242,31 @@ var radio_progress_bar: ColorRect
 # (24x24) + value label, packed into a single HBox. Replaces the old
 # "木板 4 · 零件 4 · 电池 2 · 药品 2 · 暴露度 0 · 信任 3" prompt_label
 # string with a scannable icon row.
-var _resource_bar: HBoxContainer
-var _resource_chip_labels: Dictionary = {}  # resource key -> Label (value text)
+# Polish M12: the old icon-row chip bar (refugees / plank / parts / battery /
+# medicine / threat / trust) is gone — the night HUD now only tells the
+# player "how long until dawn". Resources still live in the `resources`
+# dict and are surfaced through action-button cost labels and the
+# end-of-night report; they just don't crowd the top-left anymore.
+# Per design doc docs/design/chapter_01_night_plan_zh.md §0:
+#   "UI 不显示原始秒数，而显示 22:00 到 06:00 的夜间时钟和距天亮倒计时"
+# Each level's real duration is mapped to the canonical 8h narrative
+# (22:00 → 06:00) inside _update_time_chip, so the player feels a
+# compressed "night shift" instead of staring at a stopwatch.
+var _time_chip: PanelContainer
+var _time_chip_clock: Label
+var _time_chip_dawn: Label
+var _time_chip_radio: Label
+var _time_chip_progress: ProgressBar
+# Polish M10.5b: small keybinding hint pinned to the bottom-center of the
+# night HUD. Tells the player "WASD move · click to repair · 1/2/3" without
+# taking screen real estate. Shown only during the night phase.
+var _hud_hint_label: Label
+# Polish M11: visible pause button on the night HUD so the player has an
+# on-screen affordance (Esc was the only entry before).
+var _hud_pause_button: Button
 var menu_ui  # MenuUI instance (CanvasLayer), see _build_menu_ui
 var tutorial_overlay  # TutorialOverlay instance (CanvasLayer), see _build_tutorial_overlay
+var night_cg_overlay  # NightCGOverlay instance (CanvasLayer), see _build_cg_overlay
 # Cached state for re-rendering after locale switch. _show_night_report is
 # called with (success, body); we cache them so the menu can rebuild it.
 var last_report_success: bool = true
@@ -383,7 +418,8 @@ func _ready() -> void:
 	_apply_audio_mute()
 	_build_walk_frames()
 	_build_ui()
-	_build_resource_bar()
+	_build_time_chip()
+	_build_hud_hint()
 	# Migrate any v2 single-slot save before deciding what to show.
 	NightShiftSave.migrate_legacy_if_needed()
 	# If a save exists, prompt; otherwise fresh cover.
@@ -725,8 +761,8 @@ func _build_ui() -> void:
 	prompt_label.add_theme_constant_override("outline_size", 3)
 	hud_layer.add_child(prompt_label)
 
-	log_label = _make_label(Vector2(24, SCREEN_SIZE.y - 320), 14, Color(0.85, 0.85, 0.78))
-	log_label.size = Vector2(SCREEN_SIZE.x - 48, 240)
+	log_label = _make_label(Vector2(24, SCREEN_SIZE.y - 480), 14, Color(0.85, 0.85, 0.78))
+	log_label.size = Vector2(SCREEN_SIZE.x - 48, 440)
 	log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	log_label.add_theme_constant_override("outline_size", 3)
 	hud_layer.add_child(log_label)
@@ -795,7 +831,8 @@ func _build_ui() -> void:
 	# the player so the swing reads visually without warping the
 	# silhouette. Permanent visible=false; _draw_player toggles it on
 	# during repair ticks. polish spec §4.5 / round-2 visual fix.
-	const HammerSpriteScript := preload("res://scripts/HammerSprite.gd")
+	# (HammerSpriteScript const is declared at module top so _draw_player
+	# can read PIVOT_OFFSET / ART_SCALE directly.)
 	hammer_sprite = HammerSpriteScript.new()
 	hammer_sprite.name = "HammerSprite"
 	hammer_sprite.position = player_pos
@@ -817,6 +854,22 @@ func _build_menu_ui() -> void:
 	menu_ui.on_settings_applied = _on_menu_settings_applied
 	add_child(menu_ui)
 	_build_tutorial_overlay()
+	_build_cg_overlay()
+
+
+func _build_cg_overlay() -> void:
+	# Per-night cinematic CG keyframe + story blurb. Shown at the top of
+	# every night before the loop starts ticking. Host pauses night_paused
+	# while the overlay is up.
+	const NightCGOverlay := preload("res://scripts/NightCGOverlay.gd")
+	night_cg_overlay = NightCGOverlay.new()
+	night_cg_overlay.on_dismissed = _on_cg_overlay_dismissed
+	add_child(night_cg_overlay)
+
+
+func _on_cg_overlay_dismissed() -> void:
+	# Player clicked "Start the night" — let the loop tick.
+	night_paused = false
 
 
 func _build_tutorial_overlay() -> void:
@@ -857,26 +910,22 @@ func _on_menu_settings_applied() -> void:
 		_show_final()
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if not menu_ui:
-		return
-	if event.is_action_pressed("ui_cancel"):
-		menu_ui.toggle_pause()
-		get_viewport().set_input_as_handled()
-
-
 func _build_radio_panel() -> void:
 	radio_panel = Panel.new()
 	radio_panel.position = Vector2(SCREEN_SIZE.x * 0.5 - 200, SCREEN_SIZE.y - 280)
 	radio_panel.size = Vector2(400, 220)
 	radio_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.10, 0.13, 0.18, 0.94)
-	ps.border_color = Color(0.55, 0.78, 1.0, 0.95)
+	# Polish M11: use the project's warm amber border instead of the
+	# previous cool blue. Keeps the radio panel consistent with the rest
+	# of the HUD now that the cover/settings/slot picker all share a
+	# single theme.
+	ps.bg_color = Color(0.04, 0.05, 0.06, 0.94)
+	ps.border_color = Color(1, 0.84, 0.45, 0.95)
 	for k in ["left", "right", "top", "bottom"]:
 		ps.set("border_width_" + k, 2)
 	for k in ["top_left", "top_right", "bottom_left", "bottom_right"]:
-		ps.set("corner_radius_" + k, 8)
+		ps.set("corner_radius_" + k, 4)
 	ps.content_margin_left = 14
 	ps.content_margin_right = 14
 	ps.content_margin_top = 10
@@ -1258,7 +1307,7 @@ func _show_slot_picker() -> void:
 	# Polish M10.5: hide the radio panel so it doesn't bleed onto the cover.
 	_hide_radio_panel()
 	# Resource chips are night-only; show the prompt_label row again.
-	_set_resource_bar_visible(false)
+	_set_time_chip_visible(false)
 	# Cover has its own title block — the legacy prompt_label "subtitle"
 	# and the body hint overlap with the new block, so hide them on cover.
 	prompt_label.visible = false
@@ -1279,6 +1328,7 @@ func _show_slot_picker() -> void:
 	_build_cover_title_block()
 	_apply_cover_scrim()
 	_build_cover_character_overlay()
+	_build_cover_footer()
 
 	# Status / prompt / log fill different roles on the cover:
 	#   - status_label = the big 末日电台 title (overridden by title block)
@@ -1400,6 +1450,59 @@ func _build_cover_character_overlay() -> void:
 	sprite.modulate = Color(1, 1, 1, 0.92)
 	sprite.z_index = 1  # above the dim scrim so the silhouette reads
 	card_layer.add_child(sprite)
+
+
+# Polish M11: cover footer with Settings + Quit buttons. Previously the
+# cover had no UI affordance for these — players had to Esc into a paused
+# game to find Settings, and quitting required the OS window close. Add
+# two right-aligned buttons under the slot row.
+func _build_cover_footer() -> void:
+	var btn_w: float = 140.0
+	var btn_h: float = 40.0
+	var gap: float = 16.0
+	var y: float = SCREEN_SIZE.y - 60.0
+	# Right-align: Settings then Quit with gap to the right edge.
+	var quit_x: float = SCREEN_SIZE.x - 20.0 - btn_w
+	var settings_x: float = quit_x - gap - btn_w
+
+	var settings_btn := _make_button(
+		I18n.t("menu_settings"),
+		Vector2(settings_x, y),
+		Vector2(btn_w, btn_h),
+		_on_cover_settings_pressed
+	)
+	# Smaller font for the footer so the buttons don't dominate.
+	settings_btn.add_theme_font_size_override("font_size", 16)
+	card_layer.add_child(settings_btn)
+
+	var quit_btn := _make_button(
+		I18n.t("menu_quit"),
+		Vector2(quit_x, y),
+		Vector2(btn_w, btn_h),
+		_on_cover_quit_pressed
+	)
+	quit_btn.add_theme_font_size_override("font_size", 16)
+	card_layer.add_child(quit_btn)
+
+
+# Cover Settings button: open the same settings panel Esc would, but
+# without a fake "pause" frame. We call settings_panel_set_visible(true)
+# on the MenuUI directly.
+func _on_cover_settings_pressed() -> void:
+	if menu_ui == null:
+		return
+	if menu_ui.has_method("settings_panel_set_visible"):
+		menu_ui.settings_panel_set_visible(true)
+	# Make sure the dim is up so the panel reads.
+	if menu_ui.has_method("_dim") and menu_ui._dim:
+		menu_ui._dim.visible = true
+
+
+# Cover Quit button: terminate the running app. Steam builds would route
+# to OS-native quit and write a "quit gracefully" telemetry event, but
+# for the standalone build this is a single line.
+func _on_cover_quit_pressed() -> void:
+	get_tree().quit()
 
 
 func _build_slot_card(slot: int, pos: Vector2, sz: Vector2) -> void:
@@ -1527,7 +1630,7 @@ func _show_difficulty_picker() -> void:
 	player_token.visible = false
 	player_repair_token.visible = false
 	_hide_radio_panel()
-	_set_resource_bar_visible(false)
+	_set_time_chip_visible(false)
 	prompt_label.visible = false
 	prompt_label.text = ""
 	log_label.visible = false
@@ -1904,7 +2007,7 @@ func _show_day() -> void:
 	player_token.visible = false
 	player_repair_token.visible = false
 	_hide_radio_panel()
-	_set_resource_bar_visible(false)
+	_set_time_chip_visible(false)
 	prompt_label.visible = true
 	log_label.visible = true
 	# Hide tutorial overlay on the day picker.
@@ -2164,7 +2267,11 @@ func _on_day_card_pressed(card_id: String) -> void:
 	if card_id == "start" or data.get_card(card_id).is_empty():
 		upgrades["start"] = true
 		_log("白天选择：直接进入今晚")
+		# Polish M11: short fade out → swap to night → fade in. Hides the
+		# day→night bg texture swap and reads as intentional pacing.
+		await _fade_out(0.18)
 		_show_night()
+		await _fade_in(0.22)
 		return
 	var card: Dictionary = data.get_card(card_id)
 	var cost: Dictionary = card.get("cost", {}) as Dictionary
@@ -2180,7 +2287,9 @@ func _on_day_card_pressed(card_id: String) -> void:
 	_play_sfx("unlock")
 	# Persist after every choice
 	_save_progress()
+	await _fade_out(0.18)
 	_show_night()
+	await _fade_in(0.22)
 
 
 # ============================================================================
@@ -2221,6 +2330,7 @@ func _show_night() -> void:
 	# (more time pressure). Capped so casual can never exceed +50%.
 	var night_mod: float = clamp(1.4 - float(difficulty_modifiers.get("enemy_count", 1.0)) * 0.3, 0.7, 1.5)
 	night_duration *= night_mod
+	night_title = str(night_def.get("title", ""))
 	night_elapsed = 0.0
 	survived = false
 	player_target_id = ""
@@ -2313,13 +2423,32 @@ func _show_night() -> void:
 		})
 	event_queue.sort_custom(func(a, b): return a["time"] < b["time"])
 
-	# Story intro — pick the localized array based on current locale.
-	var story_field: String = "story_start_en" if I18n.locale == "en" else "story_start"
-	var story: Array = level.get(story_field, level.get("story_start", [])) as Array
-	if not story.is_empty():
-		_log(str(story[0]))
+	# Story intro — pick the localized string based on current locale.
+	# NOTE: The actual field on NightShiftLevels.LEVELS is story_intro /
+	# story_intro_en. The old code looked up story_start_en, which never
+	# existed on the levels, so every night fell back to the
+	# "第 N 夜开始" stub and never showed the writer's blurb. Fixed
+	# 2026-06-27.
+	var story_field: String = "story_intro_en" if I18n.locale == "en" else "story_intro"
+	var story_text: String = str(level.get(story_field, level.get("story_intro", "")))
+	if story_text != "":
+		_log(story_text)
 	else:
 		_log("第 %d 夜开始。" % (night_index + 1))
+
+	# Cinematic CG keyframe — show full-frame CG + story blurb before
+	# the night loop starts ticking. The overlay dismisses via the
+	# "Start the night" button, which clears night_paused.
+	# NOTE: night_def.cg_image may be a JSON null (e.g. night 6 has no
+	# dedicated CG yet) — str(null) returns "<null>" which would crash
+	# the loader. Guard with a Variant type check.
+	var cg_path: String = ""
+	var raw_cg: Variant = night_def.get("cg_image", null)
+	if typeof(raw_cg) == TYPE_STRING:
+		cg_path = raw_cg
+	if cg_path != "" and night_cg_overlay:
+		night_paused = true
+		night_cg_overlay.start(night_index, cg_path, story_text)
 
 	_rebuild_hotspot_visuals()
 	_rebuild_zombie_outside_sprites()
@@ -2526,7 +2655,12 @@ func _process(delta: float) -> void:
 		if not music_player.playing:
 			_play_music("report", true)
 			_pending_report_music = false
+	# CG intro overlay pauses the night loop until the player clicks
+	# "Start". Living here (not in _update_night) lets tests drive
+	# _update_night directly without being gated by the overlay.
 	if phase == "night":
+		if night_paused:
+			return
 		_update_night(delta)
 
 
@@ -3078,17 +3212,18 @@ func _redraw_enemy_visuals() -> void:
 
 func _make_enemy_dot_script(size: float) -> GDScript:
 	var script := GDScript.new()
+	# Round-3 visual cleanup: enemy tokens (data-layer) are still tracked
+	# in `enemy_tokens` and drive gameplay (breach / damage / telegraph
+	# timing), but the on-screen pale-green dot is removed per user
+	# feedback ("飞来飞去的绿色圆圈用意何在,去掉"). The Node2D shell is
+	# preserved so existing add_child / queue_free flows are unaffected;
+	# only _draw becomes a no-op. Future replacements (sprite art, dotted
+	# tracers, etc.) can drop in here without touching _redraw_enemy_visuals.
 	script.source_code = """
 extends Node2D
 func _draw() -> void:
-	var s := %f
-	# Pale-green body — "definitely not a person" tint (polish spec §5.2).
-	draw_circle(Vector2.ZERO, s, Color(0.55, 0.72, 0.48, 0.95))
-	# Dark-green inner
-	draw_circle(Vector2.ZERO, s * 0.5, Color(0.18, 0.32, 0.16, 1.0))
-	# Sickly glow
-	draw_arc(Vector2.ZERO, s * 1.4, 0, TAU, 18, Color(0.65, 0.85, 0.55, 0.45), 1.5)
-""" % size
+	pass
+"""
 	script.reload()
 	return script
 
@@ -3618,24 +3753,51 @@ func _draw_player() -> void:
 			var anchor_pos: Vector2 = player_pos
 			if player_target_id != "" and hotspots.has(player_target_id):
 				anchor_pos = hotspots[player_target_id]["pos"]
-			# Place the hammer just OUTSIDE the hotspot circle on the side
-			# closest to the player. If the player is right on top of the
-			# hotspot center, default to "above" so the hammer doesn't
-			# collapse to a single point.
-			var dir: Vector2
-			var base_angle: float
-			var offset_v: Vector2 = player_pos - anchor_pos
-			if offset_v.length() > 4.0:
-				dir = offset_v.normalized()
-				# Face the hammer toward the hotspot center so the strike
-				# reads as "into the door" rather than aimless flailing.
-				# atan2 returns 0 = +X; Sprite2D rotation 0 = up, so subtract
-				# PI/2 to align.
-				base_angle = atan2(-offset_v.y, -offset_v.x) - PI / 2.0
-			else:
-				dir = Vector2(0.0, -1.0)
-				base_angle = 0.0
-			hammer_sprite.position = anchor_pos + dir * (HOTSPOT_REACH + 6.0)
+			# Round-5 visual fix: the hammer always sits at the hotspot's
+			# upper-left corner and strikes in a fixed direction (head
+			# points down-right at the hotspot), regardless of where the
+			# player is standing. Round-4 placed the grip on the
+			# "player-facing" side of the hotspot and rotated to point
+			# at the hotspot center -- so a front-door swing was vertical,
+			# a side-window swing was horizontal, and the user reported
+			# "锤子的挥动方向应该一致" because each hotspot swung in its
+			# own direction. Fixing the position to upper-left and the
+			# swing direction to down-right makes every hotspot share
+			# the same "tap the upper-left corner" motion, which reads
+			# as one consistent striking action across the whole map.
+			# Godot y-down: (+1, +1) is the down-right quadrant; atan2
+			# returns PI/4 for that vector, which maps to sprite
+			# rotation = head pointing down-right (the hotspot).
+			var dir: Vector2 = Vector2(1.0, 1.0).normalized()
+			var base_angle: float = PI / 4.0
+			var grip_screen: Vector2 = anchor_pos + Vector2(
+				-(HOTSPOT_REACH + 6.0), -(HOTSPOT_REACH + 6.0)
+			)
+			# Godot 4 Sprite2D rotation pivots around sprite.position, NOT
+			# around the grip. Two contributions move the grip point on
+			# screen as theta advances:
+			#   1) sprite.offset (set in HammerSprite._ready to PIVOT_OFFSET)
+			#      is applied in the sprite's LOCAL frame, so it rotates
+			#      with sprite.rotation -- contributes (PIVOT_OFFSET * scale)
+			#      of displacement per unit rotation.
+			#   2) the grip pixel itself sits at texture coordinate
+			#      (512, 512) + PIVOT_OFFSET -- its distance from the
+			#      texture center is also PIVOT_OFFSET, so the rotated
+			#      pixel offset contributes another (PIVOT_OFFSET * scale).
+			# Total grip displacement around sprite.position = R(theta) *
+			# (2 * PIVOT_OFFSET * ART_SCALE). Pinning the grip to
+			# grip_screen thus needs sprite.position = grip_screen -
+			# R(theta) * 2 * PIVOT_OFFSET * ART_SCALE. The round-3
+			# baseline used sprite.position = grip_screen (no rotation
+			# compensation at all), which is why the user reported
+			# "锤把来回晃悠" — the grip traced a ~57-px circle around
+			# grip_screen as theta advanced. Round-4 first attempt
+			# compensated only the single (PIVOT_OFFSET * scale) term
+			# which halved the radius but didn't fix the wobble; the
+			# 2× formula below nails the grip exactly. Round-5 keeps
+			# the 2× compensation unchanged -- only the base_angle
+			# and grip_screen location are updated for the new fixed
+			# upper-left placement.
 			var phase: float = fmod(player_repair_timer, PlayerRepairFx.REPAIR_CYCLE_SEC) / PlayerRepairFx.REPAIR_CYCLE_SEC
 			# Two-segment swing: phase 0.0..0.45 -> swing DOWN (hammer
 			# arcs from -PI/3 back to -PI/6+1.8, max forward thrust near
@@ -3655,7 +3817,25 @@ func _draw_player() -> void:
 				# Recovery swing: back to -PI/3 over the remaining 0.55 phase
 				var recover_t: float = (phase - 0.45) / 0.55
 				swing = (-PI / 6.0 + 1.8) - recover_t * (PI / 3.0 + PI / 6.0 + 1.8)
-			hammer_sprite.rotation = base_angle + swing
+			var theta: float = base_angle + swing
+			# Rotate the SCALED total grip-displacement by theta and
+			# subtract from grip_screen so the grip on-screen coordinate
+			# stays exactly at grip_screen for every theta. The total
+			# grip displacement is 2 * PIVOT_OFFSET * ART_SCALE because
+			# BOTH sprite.offset AND the grip pixel itself contribute a
+			# PIVOT_OFFSET * ART_SCALE radial term that rotates with theta.
+			var cos_t: float = cos(theta)
+			var sin_t: float = sin(theta)
+			var pivot_scaled: Vector2 = Vector2(
+				2.0 * HammerSpriteScript.PIVOT_OFFSET.x * HammerSpriteScript.ART_SCALE,
+				2.0 * HammerSpriteScript.PIVOT_OFFSET.y * HammerSpriteScript.ART_SCALE
+			)
+			var pivot_rotated: Vector2 = Vector2(
+				pivot_scaled.x * cos_t - pivot_scaled.y * sin_t,
+				pivot_scaled.x * sin_t + pivot_scaled.y * cos_t
+			)
+			hammer_sprite.position = grip_screen - pivot_rotated
+			hammer_sprite.rotation = theta
 			# M13 art-based hammer is a Sprite2D -- it redraws automatically
 			# when rotation changes (no queue_redraw needed). The previous
 			# procedural Node2D + _draw version needed the explicit
@@ -3805,7 +3985,11 @@ func _end_night(success: bool) -> void:
 		# Failure: keep current index so player retries the same night.
 		_save_progress()
 
+	# Polish M11: short fade out before showing the report screen so the
+	# dawn bg fade doesn't clash with the clipboard report bg.
+	await _fade_out(0.2)
 	_show_night_report(success, report)
+	await _fade_in(0.25)
 
 
 func _show_night_report(success: bool, body: String) -> void:
@@ -3817,6 +4001,13 @@ func _show_night_report(success: bool, body: String) -> void:
 	# context for the night map only — keep them hidden so the stats panel
 	# is the focus.
 	hotspot_layer.visible = false
+	# Defensive: walk the layer's children and hide each button too, so
+	# any code path that flips hotspot_layer.visible back to true (e.g.
+	# a future phase change bug) still won't leak the ring overlays onto
+	# the report screen.
+	for child in hotspot_layer.get_children():
+		if child is CanvasItem:
+			(child as CanvasItem).visible = false
 	# Hide the player + repair token too — the report screen has its own
 	# character strip and the in-room sprite would visually clash.
 	player_token.visible = false
@@ -3826,7 +4017,17 @@ func _show_night_report(success: bool, body: String) -> void:
 	# stale channel buttons visible; force-hide here so the report screen
 	# reads as a single coherent surface.
 	_hide_radio_panel()
-	_set_resource_bar_visible(false)
+	_set_time_chip_visible(false)
+	# HUD keybinding hint is night-only — keep it off the report.
+	if _hud_hint_label:
+		_hud_hint_label.visible = false
+	# Defensive: dismiss any active CG overlay. Capture paths sometimes
+	# jump straight from _show_night → _end_night without the player
+	# clicking the CG's "开始守夜" button, which would otherwise leave
+	# the CG story panel covering the report body.
+	if night_cg_overlay:
+		night_cg_overlay.visible = false
+		night_cg_overlay.dismiss()
 	prompt_label.visible = true
 	log_label.visible = true
 	# Tutorial overlay belongs on the night map; force the whole
@@ -3905,6 +4106,15 @@ func _show_night_report(success: bool, body: String) -> void:
 				summary_lines.append("  位置：%s" % _hotspot_label(label))
 			else:
 				summary_lines.append("  %s" % label)
+	# N3 polish: on success, remind the player who they were defending.
+	# Chapter 1 has a fixed 27 refugees; future chapters with rescue
+	# accumulation would swap night_refugees for a tracked variable here.
+	if success and night_index + 1 < night_count:
+		if night_refugees > 0:
+			summary_lines.append("")
+			summary_lines.append(I18n.t("report_refugees_safe", [night_refugees, night_index + 2]))
+		else:
+			summary_lines.append(I18n.t("report_refugees_safe_zero"))
 	summary_lines.append("")
 	summary_lines.append(body)
 	log_label.text = "\n".join(summary_lines)
@@ -3947,11 +4157,18 @@ func _show_final() -> void:
 	# Same as night report — final screen is its own scene, hide the map
 	# hotspot buttons so the dawn illustration reads cleanly.
 	hotspot_layer.visible = false
+	# Defensive: also walk the hotspot layer's children so any future code
+	# path that flips the layer back to true still won't leak rings.
+	for child in hotspot_layer.get_children():
+		if child is CanvasItem:
+			(child as CanvasItem).visible = false
 	# Final screen has its own character overlay; hide the in-room sprite.
 	player_token.visible = false
 	player_repair_token.visible = false
 	_hide_radio_panel()
-	_set_resource_bar_visible(false)
+	_set_time_chip_visible(false)
+	if _hud_hint_label:
+		_hud_hint_label.visible = false
 	prompt_label.visible = true
 	log_label.visible = true
 	# Hide tutorial overlay on the final screen too.
@@ -3988,7 +4205,26 @@ func _show_final() -> void:
 		var doc: Dictionary = NightShiftSave.read(current_slot)
 		doc["ng_plus_count"] = ng_plus_count
 		NightShiftSave.write(doc, current_slot)
-	log_label.text = "体育馆亮起来了。Victor 的信号在城市上空转了一圈。\n更多的坐标等待回应，第二章的地图正在打开。\n\n通关次数: %d（再来一次解锁 New Game+ 加成）" % ng_plus_count
+	# P5 polish: chapter stats recap. Keep the existing prose, then
+	# append a small stats block so the final screen reads as a "what
+	# you did" summary, not just a one-liner.
+	var recap: Array = []
+	recap.append("体育馆亮起来了。Victor 的信号在城市上空转了一圈。")
+	recap.append("更多的坐标等待回应，第二章的地图正在打开。")
+	recap.append("")
+	recap.append("--- 章节统计 ---")
+	recap.append(I18n.t("final_stats_rescued", [night_refugees]))
+	recap.append(I18n.t("final_stats_breaches", [total_breaches]))
+	var ally_names: Array = []
+	if bool(allies.get("nora", false)):
+		ally_names.append("Nora")
+	if bool(allies.get("elias", false)):
+		ally_names.append("Elias")
+	ally_names.append("Victor")
+	recap.append(I18n.t("final_stats_joins", [", ".join(ally_names)]))
+	recap.append("")
+	recap.append("通关次数: %d（再来一次解锁 New Game+ 加成）" % ng_plus_count)
+	log_label.text = "\n".join(recap)
 
 	var btn := _make_button(
 		"重新开始",
@@ -4015,32 +4251,70 @@ func _make_button(text: String, pos: Vector2, size: Vector2, callback: Callable)
 	btn.text = text
 	btn.position = pos
 	btn.size = size
+	# Polish M11: button chrome matches project theme.tres (warm amber on
+	# near-black) instead of the old blue-gray. Outline is darker and a
+	# touch thicker so the text reads on busy bg art.
 	btn.add_theme_font_size_override("font_size", 20)
 	btn.add_theme_color_override("font_color", Color(0.96, 0.94, 0.86))
-	btn.add_theme_color_override("font_outline_color", Color.BLACK)
-	btn.add_theme_constant_override("outline_size", 2)
+	btn.add_theme_color_override("font_hover_color", Color(1, 0.96, 0.86))
+	btn.add_theme_color_override("font_pressed_color", Color(0.10, 0.10, 0.10))
+	btn.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	btn.add_theme_constant_override("outline_size", 3)
 	var s := StyleBoxFlat.new()
-	s.bg_color = Color(0.18, 0.22, 0.28, 0.92)
-	s.border_color = Color(0.65, 0.55, 0.35)
+	s.bg_color = Color(0.07, 0.08, 0.10, 0.92)
+	s.border_color = Color(1, 0.84, 0.45, 0.95)
 	for k in ["left", "right", "top", "bottom"]:
 		s.set("border_width_" + k, 2)
 	for k in ["top_left", "top_right", "bottom_left", "bottom_right"]:
-		s.set("corner_radius_" + k, 6)
+		s.set("corner_radius_" + k, 4)
 	s.content_margin_left = 16
 	s.content_margin_right = 16
 	s.content_margin_top = 8
 	s.content_margin_bottom = 8
 	btn.add_theme_stylebox_override("normal", s)
+	# Hover: lift bg toward the border color (warm), brighten the border.
 	var sh := s.duplicate()
-	sh.bg_color = Color(0.28, 0.34, 0.42, 0.95)
+	sh.bg_color = Color(0.12, 0.13, 0.16, 0.96)
+	sh.border_color = Color(1, 0.92, 0.55, 1)
 	btn.add_theme_stylebox_override("hover", sh)
+	# Pressed: invert — amber bg, dark text. Clear "I just clicked it" cue.
 	var sp := s.duplicate()
-	sp.bg_color = Color(0.4, 0.48, 0.58, 0.95)
+	sp.bg_color = Color(1, 0.84, 0.45, 0.95)
+	sp.border_color = Color(1, 0.95, 0.65, 1)
 	btn.add_theme_stylebox_override("pressed", sp)
+	# Focus: match hover so gamepad navigation has a visible target.
+	var sf := s.duplicate()
+	sf.bg_color = Color(0.12, 0.13, 0.16, 0.96)
+	sf.border_color = Color(1, 0.92, 0.55, 1)
+	btn.add_theme_stylebox_override("focus", sf)
+	# Disabled: muted gray. Most call sites never set disabled, but if a
+	# future flow does (e.g. locked difficulty) it should look inert.
+	var sd := s.duplicate()
+	sd.bg_color = Color(0.05, 0.05, 0.06, 0.7)
+	sd.border_color = Color(0.4, 0.42, 0.45, 0.6)
+	btn.add_theme_stylebox_override("disabled", sd)
 	btn.pressed.connect(callback)
+	# Polish M11: hover SFX for tactile feedback. Use a soft click from
+	# the SFX bus; if the bus isn't loaded yet, this is a no-op.
+	btn.mouse_entered.connect(_on_button_hover)
+	btn.focus_entered.connect(_on_button_hover)
 	if _dx_debug_probe_phase:
 		print("DEBUG _make_button created for: ", text, " callback: ", callback)
 	return btn
+
+
+# Single hover handler so every _make_button() output plays the same click
+# without re-allocating a lambda. Played only on enter (not on every
+# mouse move) to avoid spam.
+func _on_button_hover() -> void:
+	if not is_instance_valid(sfx_player):
+		return
+	# Use the existing ui_click sfx (defined in NightShiftSfx.gd) if
+	# available; fall back to a short noise burst generated inline.
+	if sfx_streams.has("ui_hover"):
+		sfx_player.stream = sfx_streams["ui_hover"]
+		sfx_player.volume_db = -6
+		sfx_player.play()
 
 
 func _log(msg: String) -> void:
@@ -4050,107 +4324,322 @@ func _log(msg: String) -> void:
 	log_label.text = "\n".join(logs)
 
 
-# Build the resource-chip bar shown in the night HUD. Replaces the old
-# text-only "木板 4 · 零件 4 ..." string with scannable icon + value chips.
+# Build the night-HUD time chip. Replaces the old 7-chip resource bar
+# (refugees / plank / parts / battery / medicine / threat / trust) with
+# a single panel that tells the player only one thing:
+#
+#   "What time of night is it now, and how long until dawn?"
+#
+# Layout (top-left, position (24, 56), below the big "第 N 夜" title):
+#
+#   ┌──────────────────────────────────────────┐
+#   │  22:47            距天亮 07:13  •电台   │  ← HBox: clock + spacer + dawn
+#   │  ████████████░░░░░░░░░░░░░░░░░░░░       │  ← thin amber progress bar
+#   └──────────────────────────────────────────┘
+#
+# Per docs/design/chapter_01_night_plan_zh.md §0 the narrative is an
+# 8h shift (22:00 → 06:00); the real time per level (60s / 120s / 180s)
+# is mapped onto those 8 hours in _update_time_chip via
+# compute_night_time(), so the clock face never shows raw seconds.
+#
 # Hidden in non-night phases; _update_status_label flips it visible
 # while the player is in the night map.
-func _build_resource_bar() -> void:
-	_resource_bar = HBoxContainer.new()
-	_resource_bar.position = Vector2(24, 56)
-	_resource_bar.add_theme_constant_override("separation", 6)
-	_resource_bar.visible = false
-	hud_layer.add_child(_resource_bar)
+func _build_time_chip() -> void:
+	_time_chip = PanelContainer.new()
+	_time_chip.position = Vector2(24, 56)
+	_time_chip.visible = false
+	# Same dark + amber chrome as the rest of the HUD (matches Pause
+	# button, cover footer, day picker, settings panel from M11).
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.07, 0.08, 0.10, 0.88)
+	style.border_color = Color(1, 0.84, 0.45, 0.9)
+	for k in ["left", "right", "top", "bottom"]:
+		style.set("border_width_" + k, 1)
+	for k in ["top_left", "top_right", "bottom_left", "bottom_right"]:
+		style.set("corner_radius_" + k, 4)
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
+	_time_chip.add_theme_stylebox_override("panel", style)
+	# Force a known width so the HBox / ProgressBar inside don't dance
+	# around when the radio hint toggles visibility.
+	_time_chip.custom_minimum_size = Vector2(320, 52)
+	_time_chip.size = Vector2(320, 52)
+	hud_layer.add_child(_time_chip)
 
-	# Chip order matches the canonical narrative: building blocks (plank /
-	# parts) first, consumables (battery / medicine) next, then social
-	# pressure (threat / trust). Each entry is:
-	#   key      : resource key the value is read from
-	#   icon_tex : Texture2D — icon_door_reinforce for plank, etc.
-	#   name     : fallback letter glyph (used only if icon_tex is null)
-	#   color    : chip background tint
-	var chips: Array = [
-		{"key": "plank",     "icon_tex": art.get("icons", {}).get("door_reinforce", null),  "name": "P", "color": Color(0.78, 0.55, 0.30)},
-		{"key": "parts",     "icon_tex": art.get("icons", {}).get("workbench",     null),  "name": "K", "color": Color(0.65, 0.65, 0.70)},
-		{"key": "battery",   "icon_tex": art.get("icons", {}).get("battery_buffer", null),  "name": "B", "color": Color(0.45, 0.78, 0.95)},
-		{"key": "medicine",  "icon_tex": art.get("icons", {}).get("medbay",        null),  "name": "M", "color": Color(0.65, 0.95, 0.65)},
-		{"key": "threat",    "icon_tex": art.get("alerts",  {}).get("warning",       null),  "name": "!", "color": Color(0.95, 0.55, 0.40)},
-		{"key": "trust",     "icon_tex": art.get("alerts",  {}).get("braced",        null),  "name": "T", "color": Color(0.95, 0.85, 0.45)},
-	]
-	for c in chips:
-		var chip := PanelContainer.new()
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0, 0, 0, 0.55)
-		style.border_color = (c.get("color", Color.WHITE) as Color)
-		style.border_color.a = 0.85
-		for k in ["left", "right", "top", "bottom"]:
-			style.set("border_width_" + k, 1)
-		for k in ["top_left", "top_right", "bottom_left", "bottom_right"]:
-			style.set("corner_radius_" + k, 4)
-		style.content_margin_left = 4
-		style.content_margin_right = 6
-		style.content_margin_top = 2
-		style.content_margin_bottom = 2
-		chip.add_theme_stylebox_override("panel", style)
-		_resource_bar.add_child(chip)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 4)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_time_chip.add_child(v)
 
-		var h := HBoxContainer.new()
-		h.add_theme_constant_override("separation", 4)
-		chip.add_child(h)
+	# Top row: clock | spacer | dawn block (+ optional radio dot)
+	var top_row := HBoxContainer.new()
+	top_row.add_theme_constant_override("separation", 8)
+	top_row.alignment = BoxContainer.ALIGNMENT_BEGIN
+	top_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(top_row)
 
-		var icon := TextureRect.new()
-		icon.size = Vector2(20, 20)
-		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		if c.get("icon_tex", null) != null:
-			icon.texture = c["icon_tex"]
-		else:
-			# Fallback glyph: single letter on a tinted background.
-			var fallback := Label.new()
-			fallback.text = str(c.get("name", "?"))
-			fallback.add_theme_font_size_override("font_size", 14)
-			fallback.add_theme_color_override("font_color", c.get("color", Color.WHITE))
-			fallback.size = Vector2(20, 20)
-			fallback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			fallback.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			chip.add_child(fallback)
-		h.add_child(icon)
+	# Big current clock — the centerpiece of the chip.
+	_time_chip_clock = Label.new()
+	_time_chip_clock.text = "22:00"
+	_time_chip_clock.add_theme_font_size_override("font_size", 22)
+	_time_chip_clock.add_theme_color_override("font_color", Color(1.0, 0.86, 0.55))
+	_time_chip_clock.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	_time_chip_clock.add_theme_constant_override("outline_size", 3)
+	_time_chip_clock.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_time_chip_clock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_row.add_child(_time_chip_clock)
 
-		var val_lbl := Label.new()
-		val_lbl.text = "0"
-		val_lbl.add_theme_font_size_override("font_size", 15)
-		val_lbl.add_theme_color_override("font_color", Color(0.96, 0.94, 0.86))
-		val_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-		val_lbl.add_theme_constant_override("outline_size", 2)
-		h.add_child(val_lbl)
-		_resource_chip_labels[str(c.get("key", ""))] = val_lbl
+	# Spacer to push the dawn block to the right.
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_row.add_child(spacer)
+
+	# Dawn block: tiny "距天亮" label above a bigger countdown number.
+	var dawn_block := VBoxContainer.new()
+	dawn_block.add_theme_constant_override("separation", 0)
+	dawn_block.alignment = BoxContainer.ALIGNMENT_END
+	dawn_block.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_row.add_child(dawn_block)
+
+	var dawn_label := Label.new()
+	dawn_label.text = I18n.t("hud_time_dawn_label")
+	dawn_label.add_theme_font_size_override("font_size", 10)
+	dawn_label.add_theme_color_override("font_color", Color(0.78, 0.74, 0.62))
+	dawn_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	dawn_label.add_theme_constant_override("outline_size", 2)
+	dawn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	dawn_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dawn_block.add_child(dawn_label)
+
+	_time_chip_dawn = Label.new()
+	_time_chip_dawn.text = "08:00"
+	_time_chip_dawn.add_theme_font_size_override("font_size", 18)
+	_time_chip_dawn.add_theme_color_override("font_color", Color(1.0, 0.94, 0.78))
+	_time_chip_dawn.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	_time_chip_dawn.add_theme_constant_override("outline_size", 2)
+	_time_chip_dawn.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_time_chip_dawn.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dawn_block.add_child(_time_chip_dawn)
+
+	# Radio hint: only shown when radio is calling. Sized as one extra
+	# character so the HBox reflows minimally when it toggles.
+	_time_chip_radio = Label.new()
+	_time_chip_radio.text = "·" + I18n.t("hud_time_radio_hint")
+	_time_chip_radio.add_theme_font_size_override("font_size", 10)
+	_time_chip_radio.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45))
+	_time_chip_radio.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	_time_chip_radio.add_theme_constant_override("outline_size", 2)
+	_time_chip_radio.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_time_chip_radio.visible = false
+	_time_chip_radio.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_row.add_child(_time_chip_radio)
+
+	# Thin progress bar under the clock. Custom styled: amber fill on a
+	# near-black track. Godot's default ProgressBar has its own bg/fg
+	# theme; we override the "fill" stylebox only.
+	_time_chip_progress = ProgressBar.new()
+	_time_chip_progress.custom_minimum_size = Vector2(296, 4)
+	_time_chip_progress.size = Vector2(296, 4)
+	_time_chip_progress.show_percentage = false
+	_time_chip_progress.max_value = 100.0
+	_time_chip_progress.value = 0.0
+	_time_chip_progress.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Hide the default label that ProgressBar paints in the middle.
+	var pb_label_off := StyleBoxEmpty.new()
+	_time_chip_progress.add_theme_stylebox_override("font", pb_label_off)
+	var pb_bg := StyleBoxFlat.new()
+	pb_bg.bg_color = Color(0.12, 0.10, 0.06, 0.85)
+	pb_bg.corner_radius_top_left = 2
+	pb_bg.corner_radius_top_right = 2
+	pb_bg.corner_radius_bottom_left = 2
+	pb_bg.corner_radius_bottom_right = 2
+	_time_chip_progress.add_theme_stylebox_override("background", pb_bg)
+	var pb_fg := StyleBoxFlat.new()
+	pb_fg.bg_color = Color(1, 0.78, 0.40, 0.95)
+	pb_fg.corner_radius_top_left = 2
+	pb_fg.corner_radius_top_right = 2
+	pb_fg.corner_radius_bottom_left = 2
+	pb_fg.corner_radius_bottom_right = 2
+	_time_chip_progress.add_theme_stylebox_override("fill", pb_fg)
+	v.add_child(_time_chip_progress)
 
 
-# Refresh chip values from the current resources dict. Called from
-# _update_status_label during the night phase.
-func _update_resource_bar() -> void:
-	if _resource_bar == null:
+# Refresh the time chip from night_elapsed / night_duration. Called from
+# _update_status_label during the night phase (≈ every frame). Pure
+# formatting + a handful of label.set_text calls — no logic, no I/O.
+func _update_time_chip() -> void:
+	if _time_chip == null:
 		return
-	for k in _resource_chip_labels:
-		var lbl: Label = _resource_chip_labels[k]
-		lbl.text = str(int(resources.get(k, 0)))
-		# Tint threat chip red when the value is climbing — visual cue
-		# to the player that "exposure" is the only resource that goes
-		# the wrong way without being obviously broken.
-		if k == "threat" and int(resources.get("threat", 0)) >= 5:
-			lbl.add_theme_color_override("font_color", Color(1.0, 0.45, 0.40))
+	var t: Dictionary = compute_night_time(night_elapsed, night_duration)
+	if _time_chip_clock:
+		_time_chip_clock.text = str(t.get("clock", "22:00"))
+	if _time_chip_dawn:
+		_time_chip_dawn.text = str(t.get("remaining", "08:00"))
+	if _time_chip_progress:
+		_time_chip_progress.value = float(t.get("progress", 0.0)) * 100.0
+	if _time_chip_radio:
+		_time_chip_radio.visible = _is_radio_active()
 
 
-# Toggle the night-only resource chip bar. Hides the prompt_label row
-# when on (so we don't double-print) and restores it when off. Every
-# phase change calls this once.
-func _set_resource_bar_visible(on: bool) -> void:
-	if _resource_bar:
-		_resource_bar.visible = on
+# Pure helper. Maps real time onto the canonical 8h night-shift
+# narrative so the player reads "22:00 → 06:00" instead of "0s / 180s".
+# Each level's night_duration is treated as one full shift; the player
+# experiences the same 8 hours whether the real level is 60s, 120s,
+# or 180s. Static so the test suite (tools/hud_time_chip_test.gd) can
+# exercise it without spinning up a full scene tree.
+#
+#   Returns: { "clock": "HH:MM", "remaining": "HH:MM", "progress": 0..1 }
+static func compute_night_time(night_elapsed: float, night_duration: float) -> Dictionary:
+	var safe_duration: float = max(1.0, night_duration)
+	var progress: float = clamp(night_elapsed / safe_duration, 0.0, 1.0)
+	# Canonical narrative: 8 hours from 22:00 to 06:00. Total shift
+	# minutes = 480; we slice it proportionally to progress.
+	var total_shift_min: int = 8 * 60
+	var cur_shift_min: int = int(progress * float(total_shift_min))
+	var rem_shift_min: int = total_shift_min - cur_shift_min
+	# Current clock face: start at 22:00, wrap mod 24 so 06:00 reads
+	# correctly at progress=1 (22 + 8 = 30 → 6).
+	var start_hour: int = 22
+	var hour_total: int = (start_hour + int(cur_shift_min / 60)) % 24
+	var minute_part: int = cur_shift_min % 60
+	# Remaining: simple H:MM split, no wrap needed (0..8h).
+	var rem_hour: int = int(rem_shift_min / 60)
+	var rem_min: int = rem_shift_min % 60
+	return {
+		"clock": "%02d:%02d" % [hour_total, minute_part],
+		"remaining": "%02d:%02d" % [rem_hour, rem_min],
+		"progress": progress,
+	}
+
+
+# Toggle the night-only time chip. Hides the prompt_label row when on
+# (so we don't double-print) and restores it when off. Every phase
+# change calls this once.
+func _set_time_chip_visible(on: bool) -> void:
+	if _time_chip:
+		_time_chip.visible = on
 	if prompt_label:
 		prompt_label.visible = not on
 		if not on:
 			prompt_label.text = ""
+	# HUD keybinding hint follows the same night-only rule as the time chip.
+	if _hud_hint_label:
+		_hud_hint_label.visible = on
+	# Visible pause button is also night-only. Hidden on cover / day picker
+	# / report / final because those screens have their own way to leave
+	# (back to cover or restart).
+	if _hud_pause_button:
+		_hud_pause_button.visible = on
+
+
+# Build the small keybinding hint pinned to the bottom-center of the
+# night HUD. Lives in hud_layer so it sits above hotspot_layer / player
+# but below the tutorial overlay (which itself sits below the CG overlay).
+# Hidden by default; flipped on by _set_time_chip_visible(true).
+func _build_hud_hint() -> void:
+	_hud_hint_label = Label.new()
+	_hud_hint_label.text = I18n.t("hud_hint_interact")
+	_hud_hint_label.add_theme_font_size_override("font_size", 13)
+	_hud_hint_label.add_theme_color_override("font_color", Color(0.78, 0.84, 0.92))
+	_hud_hint_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	_hud_hint_label.add_theme_constant_override("outline_size", 2)
+	_hud_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hud_hint_label.size = Vector2(720, 22)
+	_hud_hint_label.position = Vector2(
+		(SCREEN_SIZE.x - 720) * 0.5,
+		SCREEN_SIZE.y - 28
+	)
+	_hud_hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hud_hint_label.visible = false
+	hud_layer.add_child(_hud_hint_label)
+
+	# Polish M11: visible Pause button in the top-right of the night HUD.
+	# Previously Esc was the only way to pause — players who never tried Esc
+	# had no on-screen affordance. A small ⏸ button keeps the affordance
+	# visible and lets Steam Deck / gamepad users navigate via focus.
+	var pause_btn := Button.new()
+	pause_btn.text = "⏸ " + I18n.t("menu_pause")
+	pause_btn.add_theme_font_size_override("font_size", 14)
+	pause_btn.position = Vector2(SCREEN_SIZE.x - 100, 12)
+	pause_btn.size = Vector2(84, 28)
+	pause_btn.pressed.connect(_on_hud_pause_pressed)
+	# Style matches _make_button chrome but smaller padding.
+	var pbs := StyleBoxFlat.new()
+	pbs.bg_color = Color(0.07, 0.08, 0.10, 0.88)
+	pbs.border_color = Color(1, 0.84, 0.45, 0.9)
+	for k in ["left", "right", "top", "bottom"]:
+		pbs.set("border_width_" + k, 1)
+	for k in ["top_left", "top_right", "bottom_left", "bottom_right"]:
+		pbs.set("corner_radius_" + k, 3)
+	pbs.content_margin_left = 8
+	pbs.content_margin_right = 8
+	pbs.content_margin_top = 4
+	pbs.content_margin_bottom = 4
+	pause_btn.add_theme_stylebox_override("normal", pbs)
+	var pbh := pbs.duplicate()
+	pbh.bg_color = Color(0.12, 0.13, 0.16, 0.95)
+	pbh.border_color = Color(1, 0.92, 0.55, 1)
+	pause_btn.add_theme_stylebox_override("hover", pbh)
+	pause_btn.add_theme_color_override("font_color", Color(0.96, 0.94, 0.86))
+	pause_btn.add_theme_color_override("font_hover_color", Color(1, 0.96, 0.86))
+	pause_btn.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	pause_btn.add_theme_constant_override("outline_size", 2)
+	pause_btn.mouse_entered.connect(_on_button_hover)
+	pause_btn.focus_entered.connect(_on_button_hover)
+	pause_btn.visible = false
+	hud_layer.add_child(pause_btn)
+	_hud_pause_button = pause_btn
+
+
+# Pause button click handler — defers to the existing MenuUI toggle_pause()
+# so the pause panel state machine and audio mute logic stay in one place.
+func _on_hud_pause_pressed() -> void:
+	if menu_ui and menu_ui.has_method("toggle_pause"):
+		menu_ui.toggle_pause()
+
+
+# Polish M11: fade transition helper. Reuses the existing flash_rect
+# (ColorRect spanning SCREEN_SIZE) so we don't add a new node. The
+# awaitable signature lets the caller chain fades:
+#
+#   await _fade_out(0.2)
+#   rebuild_screen()
+#   await _fade_in(0.25)
+#
+# Both functions yield a frame so other code can interleave.
+var _fade_busy: bool = false
+
+func _fade_out(duration: float = 0.2) -> void:
+	if flash_rect == null:
+		return
+	_fade_busy = true
+	flash_rect.color = Color(0, 0, 0, 0)
+	flash_rect.visible = true
+	flash_rect.mouse_filter = Control.MOUSE_FILTER_STOP  # block input during fade
+	var t: float = 0.0
+	while t < duration:
+		t += get_process_delta_time()
+		flash_rect.color.a = min(1.0, t / duration)
+		await get_tree().process_frame
+	flash_rect.color.a = 1.0
+
+
+func _fade_in(duration: float = 0.25) -> void:
+	if flash_rect == null:
+		return
+	flash_rect.color = Color(0, 0, 0, 1)
+	var t: float = 0.0
+	while t < duration:
+		t += get_process_delta_time()
+		flash_rect.color.a = max(0.0, 1.0 - t / duration)
+		await get_tree().process_frame
+	flash_rect.color.a = 0.0
+	flash_rect.visible = false
+	flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fade_busy = false
 
 
 func _unlock_ach(id: String) -> void:
@@ -4165,19 +4654,16 @@ func _unlock_ach(id: String) -> void:
 
 
 func _update_status_label() -> void:
-	var remaining: float = max(0.0, night_duration - night_elapsed)
-	var mins := int(floor(remaining / 60.0))
-	var secs := int(floor(remaining - mins * 60))
-	status_label.text = "第 %d 夜  %02d:%02d" % [night_index + 1, mins, secs]
-
-	# Polish M10.5: use the icon-chip resource bar instead of the old
-	# "木板 4 · 零件 4 ..." text string. Hide the prompt_label row so
-	# we don't double-print. The radio-active hint is appended to the
-	# status_label so the player still sees "电台呼叫中".
-	if _resource_bar:
-		_resource_bar.visible = true
-		_update_resource_bar()
-	prompt_label.visible = false
-	prompt_label.text = ""
-	if _is_radio_active():
-		status_label.text += "  ·  电台呼叫中"
+	# Polish M12: the time chip carries the clock + countdown AND the
+	# radio-active hint (玩家眼睛在时间上,顺带看). status_label stays
+	# small with just the chapter title.
+	# The cover screen hides status_label (see line ~1361); this is the
+	# only place that re-shows it for the night HUD.
+	status_label.visible = true
+	status_label.text = "第 %d 夜" % (night_index + 1)
+	if _time_chip:
+		_time_chip.visible = true
+		_update_time_chip()
+	if prompt_label:
+		prompt_label.visible = false
+		prompt_label.text = ""

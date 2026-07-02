@@ -28,9 +28,12 @@ const ART_PATH := "res://assets/final/night_shift/player_hammer_art.png"
 const PIVOT_OFFSET := Vector2(-302.9, 343.0)
 
 # Art hammer is 1024x1024; at 1.0 scale that dwarfs the 128x160
-# player_token. Scale 1/16 -> ~64px wide hammer, comparable in visual
-# weight to the round-2.1 procedural hammer (28px head + 38px handle).
-const ART_SCALE := 1.0 / 16.0
+# player_token. Scale 1/22 -> ~46.5px wide hammer, ~28% smaller than
+# the round-4 1/16 (~64px) baseline. Round-5 visual fix per user
+# feedback: the round-4 hammer read as visually heavy at 64px and
+# competed with the player silhouette; 1/22 keeps it readable as
+# a tool without dominating the hotspot strike zone.
+const ART_SCALE := 1.0 / 22.0
 
 
 func _ready() -> void:

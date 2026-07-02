@@ -22,6 +22,18 @@ static func build_all() -> Dictionary:
 	# file is present, otherwise fall back to a procedural clip so the game
 	# still plays something. Both must be AudioStream-compatible so the
 	# generic _play_sfx path can swap them in without branching.
+	#
+	# Note (polish M10.5 audit): sfx_footstep.mp3 + sfx_wood_plank_nail.mp3
+	# exist under assets/audio/ but the team noted them as "full-length;
+	# trim pipeline pending" in the round-2 commit message. They are
+	# ~50 s / ~12 s AI-generated cues, NOT trimmed short SFX — playing
+	# them as footstep / nail-swing would fire a multi-second clip on
+	# every player move. The .wav paths below never existed on disk
+	# (the team committed .mp3 only) so ResourceLoader.exists() returns
+	# false either way and the procedural fallback fires — which is the
+	# correct behavior for the trimmed-short-sfx slot. Flip the
+	# extensions to ".mp3" once the trim pipeline lands; until then the
+	# procedural beep is what the player actually hears.
 	sfx["footstep"] = _load_external_or(
 		"res://assets/audio/sfx_footstep.wav",
 		beep(180.0, 0.05, 0.12)
