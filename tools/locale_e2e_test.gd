@@ -110,18 +110,23 @@ func _run() -> void:
 	g._show_cover()
 	_assert(g.status_label != null, "status_label exists after _show_cover")
 	if g.status_label != null:
-		_assert(g.status_label.text == "末日电台：旧体育馆守夜",
-			"zh cover title: '%s'" % g.status_label.text)
+		# Polish M10.5: _build_cover_title_block rebinds the main title to a
+		# fresh big Label inside the title block, intentionally clearing the
+		# status_label so the chrome strip doesn't double-print the same
+		# string in tiny font. status_label.text == "" is the product
+		# contract; the title itself lives on a new Label under card_layer.
+		_assert(g.status_label.text == "",
+			"zh cover title: status_label cleared (block uses new title Label), got '%s'" % g.status_label.text)
 	I18n.locale = "en"
 	g._show_cover()
 	if g.status_label != null:
-		_assert(g.status_label.text == "Last Radio: Old Stadium Watch",
-			"en cover title: '%s'" % g.status_label.text)
+		_assert(g.status_label.text == "",
+			"en cover title: status_label cleared, got '%s'" % g.status_label.text)
 	I18n.locale = "zh"
 	g._show_cover()
 	if g.status_label != null:
-		_assert(g.status_label.text == "末日电台：旧体育馆守夜",
-			"zh cover title after switch: '%s'" % g.status_label.text)
+		_assert(g.status_label.text == "",
+			"zh cover title after switch: status_label cleared, got '%s'" % g.status_label.text)
 	g.queue_free()
 
 	print("Locale E2E test: %s (passed=%d, failed=%d)" % [

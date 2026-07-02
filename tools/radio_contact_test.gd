@@ -15,8 +15,7 @@ var failed: int = 0
 
 
 func _initialize() -> void:
-	_run()
-	quit(0 if failed == 0 else 1)
+	_run()  # fire-and-forget; _run() owns quit() at the end
 
 
 func _assert(cond: bool, name: String) -> void:
@@ -38,6 +37,9 @@ func _run() -> void:
 	await process_frame
 	game.call("_on_start_pressed")
 	game.call("_on_day_card_pressed", "start")
+	# _on_day_card_pressed is async (await _fade_out + _show_night +
+	# _fade_in); wait for the fade to land phase == "night".
+	await create_timer(0.3).timeout
 	_assert(game.phase == "night", "entered night 1")
 
 	# Night 1 doesn't have radio by default — but the data path lets us force
@@ -232,3 +234,4 @@ func _run() -> void:
 	print("Radio contact test: %s (passed=%d, failed=%d)" % [
 		"PASS" if failed == 0 else "FAIL", passed, failed
 	])
+	quit(0 if failed == 0 else 1)

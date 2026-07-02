@@ -21,8 +21,7 @@ var failed: int = 0
 
 
 func _initialize() -> void:
-	_run()
-	quit(0 if failed == 0 else 1)
+	_run()  # fire-and-forget; _run() owns quit() at the end
 
 
 func _assert(cond: bool, name: String) -> void:
@@ -64,6 +63,7 @@ func _run() -> void:
 
 	# 4) Enter night 1 and verify hotspot set
 	game.call("_on_day_card_pressed", "start")
+	await create_timer(0.3).timeout
 	_assert(game.phase == "night", "skipped to night phase")
 	_assert(game.hotspots.has("front_door"), "night 1 unlocked front_door")
 	_assert(game.hotspots.has("left_window"), "night 1 unlocked left_window")
@@ -184,6 +184,16 @@ func _run() -> void:
 	game.call("_on_start_pressed")
 	game.call("_on_day_card_pressed", "start")
 	game.night_index = 0
+	# Night 10 left night_elapsed at night_duration (180s); without resetting
+	# here, the very first _update_night below sees night_elapsed >=
+	# night_duration and fires _end_night(true) (success path!) before the
+	# breach grace ever gets to count down. Reset both so the breach grace
+	# path is what actually triggers _end_night(false).
+	game.night_elapsed = 0.0
+	game.night_duration = 60.0
+	# Wait for the async _on_day_card_pressed fade to land us in "night"
+	# phase so _update_night actually runs the breach check.
+	await create_timer(0.4).timeout
 	var fdoor: Dictionary = game.hotspots["front_door"]
 	fdoor["assault"] = true
 	fdoor["value"] = 0.0
@@ -192,6 +202,9 @@ func _run() -> void:
 		game.call("_update_night", 0.1)
 	_assert(game.phase == "night_report", "failure path reaches report")
 	_assert(not game.survived, "failure flag set")
+	# _end_night is async: phase flips before _fade_out(0.2) + _show_night_report
+	# complete the render. Wait for log_label to populate before reading.
+	await create_timer(0.5).timeout
 	# Failure report should show stats including breach count
 	var fail_log: String = game.log_label.text
 	_assert(fail_log.find("失守次数") >= 0, "failure report shows breach stats")
@@ -213,6 +226,7 @@ func _run() -> void:
 	print("Night shift full-flow test: %s (passed=%d, failed=%d)" % [
 		"PASS" if failed == 0 else "FAIL", passed, failed
 	])
+	quit(0 if failed == 0 else 1)
 
 
 func _day_panels() -> Array:

@@ -12,8 +12,7 @@ var failed: int = 0
 
 
 func _initialize() -> void:
-	_run()
-	quit(0 if failed == 0 else 1)
+	_run()  # fire-and-forget; _run() owns quit() at the end
 
 
 func _assert(cond: bool, name: String) -> void:
@@ -36,6 +35,7 @@ func _run() -> void:
 
 	game.call("_on_start_pressed")
 	game.call("_on_day_card_pressed", "start")
+	await create_timer(0.3).timeout
 	_assert(game.phase == "night", "entered night 1")
 
 	# --- Failure path ---------------------------------------------------
@@ -51,6 +51,9 @@ func _run() -> void:
 			break
 		game.call("_update_night", 0.1)
 	_assert(game.phase == "night_report", "failure path reaches night_report via breach grace")
+	# _end_night is async: phase flips before _fade_out(0.2) + _show_night_report
+	# complete the render. Wait for the report UI to populate log_label.text.
+	await create_timer(0.5).timeout
 
 	var fail_log: String = game.log_label.text
 	_assert(fail_log.find("数据") >= 0, "failure report has stats header")
@@ -88,6 +91,8 @@ func _run() -> void:
 		h["warning"] = false
 		game.hotspots[id] = h
 	game.call("_end_night", true)
+	# Same async render wait as the failure path above.
+	await create_timer(0.5).timeout
 	_assert(game.phase == "night_report", "success path reaches night_report")
 
 	var ok_log: String = game.log_label.text
@@ -102,3 +107,4 @@ func _run() -> void:
 	print("Night-report stats test: %s (passed=%d, failed=%d)" % [
 		"PASS" if failed == 0 else "FAIL", passed, failed
 	])
+	quit(0 if failed == 0 else 1)

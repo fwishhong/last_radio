@@ -13,8 +13,7 @@ var failed: int = 0
 
 
 func _initialize() -> void:
-	_run()
-	quit(0 if failed == 0 else 1)
+	_run()  # fire-and-forget; _run() owns quit() at the end
 
 
 func _assert(cond: bool, name: String) -> void:
@@ -59,8 +58,9 @@ func _run() -> void:
 			day_panels.append(c)
 	_assert(day_panels.size() == 1, "night 1 day shows 1 card (skip)")
 
-	# 4) Pick "start" -> moves to night
+	# 4) Pick "start" -> moves to night (async fade 180ms; await it)
 	game.call("_on_day_card_pressed", "start")
+	await create_timer(0.3).timeout
 	_assert(game.phase == "night", "moved to night")
 	_assert(game.hotspots.has("front_door"), "front_door hotspot exists")
 	_assert(game.hotspots.has("left_window"), "left_window hotspot exists")
@@ -149,3 +149,4 @@ func _collect_buttons(node: Node, out: Array) -> void:
 	print("Game flow integration: %s (passed=%d, failed=%d)" % [
 		"PASS" if failed == 0 else "FAIL", passed, failed
 	])
+	quit(0 if failed == 0 else 1)
