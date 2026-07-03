@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Beta launch kit** — three new docs + roadmap state bump so closed-beta
+  (T-7 friends-only) and Steam store page can be assembled without
+  scrambling:
+  - `docs/beta_p0_risks.md` — known-P0 / P1 / P2 / scope-cut table for
+    beta testers, paired with how to file a bug and what is NOT a bug.
+  - `docs/store/RELEASE_NOTES.md` — Steamworks "Release Notes" source
+    (v0.6.0-beta + v1.0.0 launch), zh + en paired, system requirements,
+    credits, post-launch plan.
+  - `docs/store/PRESS_KIT.md` — factsheet, short/long descriptions,
+    5-7 selling-point bullets, capsule + screenshot inventory, trailer
+    pointer, technical specs, press-contact placeholders (`[TODO]` for
+    solo-dev to fill before launch), boilerplate blurbs, and an explicit
+    "what NOT to claim" list (no roguelike / multiplayer / voice / mod
+    claims — they will be wrong).
+- `docs/release_roadmap.md` — M6 status updated from "Stub, GodotSteam
+  pending" to "GodotSteam 4.20 + Steamworks 1.64 real API, 8 achievements
+  + cloud saves + Rich Presence; headless without Steam client
+  gracefully fails". Polish-spec table at bottom also re-aligned with
+  shipped commits (M11 NPC AI ✅, M13 hammer ✅, M13.1 player repair ✅,
+  M14 day-card bodies ✅; M12 NPC sprite / status bar still 🔜;
+  M15 character arc art ✅ but in-game "Victor 失联" arc not yet scripted).
+
 - **M10.5 visual polish suite** — covers, capsules, character art in
   every screen, resource bar as icon chips, and a UI-leak sweep. 19/19
   headless suites green (~720 assertions). Polish spec §6 / §7.

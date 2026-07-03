@@ -116,7 +116,7 @@
 | M3 教程夜 | ✅ 完成 |
 | M4 多存档 + 云 | ✅ 完成 |
 | M5 美术 + BGM | ✅ 完成 |
-| M6 Steam 集成 | ✅ 完成(Stub,GodotSteam 待后续) |
+| M6 Steam 集成 | ✅ 完成(GodotSteam 4.20 + Steamworks 1.64 真实 API,8 成就 + 云存档 + Rich Presence;headless 无 Steam client 时 graceful fail) |
 | M7 法务 | ✅ 完成 |
 | M8 图标 / Splash | ✅ 完成 |
 | M9 构建流水线 | ✅ 完成(`tools/build_release.ps1/.sh` + `export_presets.cfg` 三平台出包) |
@@ -137,10 +137,11 @@
 | ⑤ (M11.5) | 启动默认静音 (Settings 默认 muted=true + CLI flag override) | 0.25d | ✅ (新 commit) | polish spec §6.2 |
 | M13.1 | player_repair_*.png 重做 3 帧 (image-to-image 让角色风格一致) + 接回 player_repair_token | 1d | ✅ (新 commit) | polish spec §6.3 |
 | M14 | 25 张 day card body 独白化 (zh 先) | 1d | ✅ (新 commit) | polish spec §6.3 |
-| M11 | NPC AI 接进主循环 + 软锁定 + zombie 视觉强化 | 2d | 🔜 | polish spec §4 / §5 |
+| M11 | NPC AI 接进主循环 + 软锁定 + zombie 视觉强化 | 2d | ✅ `49bd1cd` + M11 entry in CHANGELOG | polish spec §4 / §5 |
 | M12 | NPC sprite + 顶部状态条 | 1d | 🔜 | polish spec §4.3 / §4.4 / §5 |
-| M13 | Cover / Tutorial Step 4 / Night Report 日志化 | 2d | 🔜 | polish spec §6 |
-| M14 | 25 张 day card body 独白化 (zh 先) | 1d | 🔜 | polish spec §6.3 |
-| M15 | 章节延展：角色来去 + Victor 失联 | 2d | 🔜 | polish spec §3 / §6.4 |
+| M13 | Cover / Tutorial Step 4 / Night Report 日志化 | 2d | ✅ `2c006ca` (hammer sprite) | polish spec §6 |
+| M13.1 | player_repair_* art 重做 + 接回 repair_token | 1d | ✅ (新 commit) | polish spec §6.3 |
+| M14 | 25 张 day card body 独白化 (zh 先) | 1d | ✅ (新 commit) | polish spec §6.3 |
+| M15 | 章节延展：角色来去 + Victor 失联 | 2d | 🟡 美术 (`7d3f539` + `6ed9b77`) / 剧情未实装 | polish spec §3 / §6.4 |
 
 **预计总工时**：8 天。详见 polish spec §9。
