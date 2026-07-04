@@ -136,10 +136,45 @@
 | ⑤ (M11.5) | 启动默认静音 (Settings 默认 muted=true + CLI flag override) | 0.25d | ✅ (新 commit) | polish spec §6.2 |
 | M13.1 | player_repair_*.png 重做 3 帧 (image-to-image 让角色风格一致) + 接回 player_repair_token | 1d | ✅ (新 commit) | polish spec §6.3 |
 | M14 | 25 张 day card body 独白化 (zh 先) | 1d | ✅ (新 commit) | polish spec §6.3 |
-| M11 | NPC AI 接进主循环 + 软锁定 + zombie 视觉强化 | 2d | 🔜 | polish spec §4 / §5 |
+| M11 | NPC AI 接进主循环 + 软锁定 + zombie 视觉强化 | 2d | 🔜 | polish spec §4 / §5 — [M11 详细 section ↓](#m11--npc-ai-接入主循环详细) |
 | M12 | NPC sprite + 顶部状态条 | 1d | 🔜 | polish spec §4.3 / §4.4 / §5 |
 | M13 | Cover / Tutorial Step 4 / Night Report 日志化 | 2d | 🔜 | polish spec §6 |
 | M14 | 25 张 day card body 独白化 (zh 先) | 1d | 🔜 | polish spec §6.3 |
 | M15 | 章节延展：角色来去 + Victor 失联 | 2d | 🔜 | polish spec §3 / §6.4 |
+
+### M11 — NPC AI 接入主循环（详细）
+
+> 索引：[polish spec §4.1-4.7](../../design/last_radio_v2_polish_spec.md) / [polish spec §9-M11](../../design/last_radio_v2_polish_spec.md#9-路线图m11m15)
+
+**意图**：把 `scripts/NightShiftActors.gd`（当前 dead code，polish spec §4.6 标注）接进 `NightShiftGame._update_night` 主循环，让 Nora / Elias / Lily / Tom 等同伴在玩家维修 hotspot 时真的去"救急"——不死板但不强 AI。本节只做 AI 行为 + 数据 schema + 测试；sprite / zombie tint 等视觉层归 M12。
+
+**交付清单**：
+
+- **A. 主循环 tick**：在 `_update_night` 里加 `_tick_npcs(delta)` 调用，0.2s 周期（`eval_timer` 字段控制频率）。判据：`grep _tick_npcs scripts/NightShiftGame.gd` 命中 + 频率常量可调。
+- **B. 4 条行为规则**（polish spec §4.2）：
+  1. **不抢玩家**：玩家在 hotspot X 时 NPC 不选 X 作为目标
+  2. **软锁定 2s**：`commit_timer` 倒计时；未归零或目标 < 90% 不重评
+  3. **移动 cooldown**：`walk_timer` 限制 re-path 频率，避免抖
+  4. **只选最危急**：按 `value / max_value` 升序 + breach 倒计时排序
+- **C. 数据 schema**：`npc_state[ally_id] = { pos, target, commit_timer, walk_timer, eval_timer, speed }`，**以 `ally_id` 为 key，新增 NPC 是加条目不是改结构**——M15 引入 Lily / Tom 时直接 `npc_state["lily"] = {...}`，无需改 M11 代码。
+
+**spec 字段 vs 实际工程字段对照**（避免 review 时被指出"跟 spec 不一致"打回）：
+
+| 字段 | 来源 | 用途 |
+|---|---|---|
+| `pos` | polish spec §4.5 | NPC 当前坐标 |
+| `target` | polish spec §4.5 | NPC 软锁定的目标 hotspot id |
+| `commit_timer` | polish spec §4.5 | 软锁定倒计时（2s） |
+| `walk_timer` | polish spec §4.5 | 移动节流 |
+| `eval_timer` | **工程扩展** | 0.2s 重评周期（polish spec §4.5 未列，主循环 tick 必需） |
+| `speed` | **工程扩展** | NPC 移动速度 px/s（polish spec §4.5 未列，行为规则 3 必需） |
+
+- **D. 测试**：`tools/npc_ai_test.gd` 覆盖 4 条规则 + 软锁定 + 不抢玩家 + cooldown。判据：22 套件 → 23 套件 headless gate 全绿。
+- **E. 风险**：
+  1. `NightShiftActors.gd` 是 dead code，需要重写 / 重接而不是原地修改。
+  2. M15 引入 Lily / Tom 后 `npc_state` 需扩——schema 以 `ally_id` 为 key，加条目不改结构（见 C）。
+  3. NPC 与 zombie 在同 hotspot 时 z-order 冲突（zombie tint 归 M12，M11 需预留 `npc_layer` 节点位置避免遮挡）。
+
+**PR 范围**：~300 行 GDScript（`_tick_npcs` 实现 + `npc_state` 维护 + 测试）。本节为路线图索引；详细实现进 `feature/m11-npc-ai-loop` 分支后另开 PR。
 
 **预计总工时**：8 天。详见 polish spec §9。
