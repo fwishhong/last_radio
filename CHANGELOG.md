@@ -8,6 +8,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- M13 narrative-hooks: 3 narrative anchors wired into the existing
+  phase machine (polish spec §6). Hook A — cover monologue: 3-line
+  narrator overlay (2 narrator lines + 1 attribution, fade-in tween
+  0→1 over 3s) above the slot picker. Hook B — tutorial step 4
+  mini-game: "tune to Victor's frequency" (HSlider 7.000–7.200 MHz,
+  7.085 ±0.005 target) layered on after the original 3 steps complete
+  on Night 0. Persisted via new `tutorial_done_step4: Boolean` save
+  field, `SAVE_VERSION` bumped 4 → 5, `migrate_v4_to_v5(doc)` adds
+  the field for pre-M13 saves. Hook C — night-report 3-line body:
+  `previous_allies = allies.duplicate(true)` snapshot taken at the
+  start of `_show_day()`; `_show_night_report(success, body)` now
+  prepends 3 bullet lines (当夜事件 / 幸存者状态 / Victor 破碎广播
+  `report_victor_log_1..10` keyed by night) above the existing rich
+  stats block; `NightReport.gd` scene accepts optional
+  `allies_before` / `current_allies` in `setup()` and renders the
+  same 3-line body when provided (BaseScreen path). 20 new i18n
+  keys in both `data/i18n/zh.json` and `data/i18n/en.json`
+  (cover 3 + tut_step4 4 + report_victor_log_1..10 + report_survivors
+  joined/left/lost 3). New tests: `tools/cover_monologue_test.gd`
+  (14), `tools/tutorial_step4_test.gd` (24), `tools/night_report_log_test.gd`
+  (15) — total 53 new assertions; 22-suite gate (18 base + 3 new)
+  green except for 1 pre-existing failure inherited from
+  `6ed9b77` M15-prep data layer (`night_shift_data_validate` —
+  `let_daniel_go` / `let_daniel_stay` card-type whitelist; M15
+  follow-up scope, not M13). 6 capture scripts in `tools/capture_*.gd`
+  write 1280×720 PNGs to `user://screenshots/` (cover monologue +
+  tutorial step 4 + 4 night reports) for visual review. No data
+  layer changes, no actor / art pipeline changes.
 - M14: day-card body rewrite into first-person narrator monologues.
   All 29 day cards in `data/night_shift/day_cards.json` now read as the
   player narrator weighing each option in their head — short, tired,

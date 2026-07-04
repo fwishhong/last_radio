@@ -155,6 +155,10 @@ var upgrades: Dictionary = {}  # {card_id: true}
 var day_effects: NightShiftDayEffects = NightShiftDayEffects.new()
 var logs: Array = []  # recent log lines (max 6)
 var allies: Dictionary = {"nora": false, "elias": false, "victor": true}
+# M13 narrative-hooks: snapshot of allies taken at the start of each day
+# (in _show_day). The night report diffs current `allies` against this
+# snapshot to render the "幸存者状态" log line (joined / left / lost).
+var previous_allies: Dictionary = {"nora": false, "elias": false, "victor": true}
 var radio_available: bool = false
 var radio_completed: bool = false
 var radio_missed: bool = false
@@ -783,6 +787,7 @@ func _build_tutorial_overlay() -> void:
 	const TutorialOverlay := preload("res://scripts/TutorialOverlay.gd")
 	tutorial_overlay = TutorialOverlay.new()
 	tutorial_overlay.on_tutorial_finished = _on_tutorial_finished
+	tutorial_overlay.on_step4_finished = _on_tutorial_step4_finished
 	add_child(tutorial_overlay)
 
 
@@ -799,6 +804,33 @@ func _on_tutorial_finished() -> void:
 	var doc: Dictionary = NightShiftSave.read(current_slot)
 	doc["tutorial_done"] = true
 	NightShiftSave.write(doc, current_slot)
+	# M13 narrative-hooks: chain into step 4 (radio dial mini-game) if
+	# the player hasn't completed it yet. The step-4 panel lives in the
+	# bottom-left corner and shows only on Night 0 (guarded by
+	# night_index == 0 + !tutorial_done_step4).
+	_maybe_start_step4()
+
+
+func _on_tutorial_step4_finished() -> void:
+	# M13 narrative-hooks: persist the step-4 (radio dial mini-game) flag
+	# separately from the original tutorial_done. Step 4 is opt-in and
+	# only ever shows on Night 0; this signal fires when the player
+	# successfully lands on 7.085 MHz.
+	var doc: Dictionary = NightShiftSave.read(current_slot)
+	doc["tutorial_done_step4"] = true
+	NightShiftSave.write(doc, current_slot)
+
+
+func _maybe_start_step4() -> void:
+	if not tutorial_overlay:
+		return
+	if night_index != 0:
+		return
+	if tutorial_overlay.is_active():
+		return
+	if current_slot > 0 and NightShiftSave.read(current_slot).get("tutorial_done_step4", false):
+		return
+	tutorial_overlay.start_step4_only()
 
 
 func _on_menu_settings_applied() -> void:
@@ -1123,16 +1155,85 @@ func _show_slot_picker() -> void:
 	prompt_label.text = I18n.t("slot_pick_title")
 	log_label.text = I18n.t("cover_body")
 
+	# M13 narrative-hooks: 3-line cover monologue (2 narrator lines +
+	# 1 attribution). Sits between the title row (~y=0–80) and the slot
+	# cards (start at y=220), fades in over 3s via Tween. Shows every
+	# time _show_slot_picker() runs — not gated by save.
+	_build_cover_monologue()
+
 	# Build 3 slot cards side by side.
 	var slot_w: float = 320.0
 	var slot_h: float = 280.0
 	var gap: float = 30.0
 	var total_w: float = 3.0 * slot_w + 2.0 * gap
 	var start_x: float = (SCREEN_SIZE.x - total_w) * 0.5
-	var y: float = 220.0
+	var y: float = 280.0
 	for slot in range(1, 4):
 		var sx: float = start_x + (slot - 1) * (slot_w + gap)
 		_build_slot_card(slot, Vector2(sx, y), Vector2(slot_w, slot_h))
+
+
+# M13 cover monologue. Two narrator lines + one italic attribution
+# line, centered horizontally, fading in over 3s. Positioned in the
+# strip between the title block (top) and the slot cards (middle).
+func _build_cover_monologue() -> void:
+	var monologue_w: float = 760.0
+	var monologue_x: float = (SCREEN_SIZE.x - monologue_w) * 0.5
+	var monologue_y: float = 130.0
+
+	var backdrop := ColorRect.new()
+	backdrop.position = Vector2(monologue_x - 16.0, monologue_y - 8.0)
+	backdrop.size = Vector2(monologue_w + 32.0, 110.0)
+	backdrop.color = Color(0, 0, 0, 0.32)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card_layer.add_child(backdrop)
+
+	var line1 := Label.new()
+	line1.text = I18n.t("cover_monologue_line1")
+	line1.position = Vector2(monologue_x, monologue_y + 4.0)
+	line1.size = Vector2(monologue_w, 32.0)
+	line1.add_theme_font_size_override("font_size", 20)
+	line1.add_theme_color_override("font_color", Color(1.0, 0.96, 0.86))
+	line1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	line1.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	line1.add_theme_constant_override("outline_size", 3)
+	card_layer.add_child(line1)
+
+	var line2 := Label.new()
+	line2.text = I18n.t("cover_monologue_line2")
+	line2.position = Vector2(monologue_x, monologue_y + 40.0)
+	line2.size = Vector2(monologue_w, 32.0)
+	line2.add_theme_font_size_override("font_size", 20)
+	line2.add_theme_color_override("font_color", Color(1.0, 0.96, 0.86))
+	line2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	line2.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	line2.add_theme_constant_override("outline_size", 3)
+	card_layer.add_child(line2)
+
+	var attribution := Label.new()
+	attribution.text = I18n.t("cover_monologue_attribution")
+	attribution.position = Vector2(monologue_x, monologue_y + 76.0)
+	attribution.size = Vector2(monologue_w, 22.0)
+	attribution.add_theme_font_size_override("font_size", 13)
+	# Italic-ish: lean on the color contrast (slightly cooler hue) and
+	# smaller font size rather than asking the default font for italic
+	# glyphs (which would silently no-op on the fallback).
+	attribution.add_theme_color_override("font_color", Color(0.78, 0.86, 0.94))
+	attribution.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
+	attribution.add_theme_constant_override("outline_size", 2)
+	attribution.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	card_layer.add_child(attribution)
+
+	# Fade-in tween: alpha 0 → 1 over 3s. We start from 0 so the
+	# monologue "appears" slowly while the cover is on screen, giving
+	# the player time to read it.
+	var fade_targets: Array = [backdrop, line1, line2, attribution]
+	for node in fade_targets:
+		(node as CanvasItem).modulate.a = 0.0
+	var tween := create_tween()
+	tween.set_parallel(true)
+	for node in fade_targets:
+		tween.tween_property(node, "modulate:a", 1.0, 3.0)
 
 
 func _build_slot_card(slot: int, pos: Vector2, sz: Vector2) -> void:
@@ -1450,6 +1551,7 @@ func _on_difficulty_confirm() -> void:
 		"radio_tuned_channel": radio_tuned_channel,
 		"radio_contacts_made": radio_contacts_made,
 		"tutorial_done": false,
+		"tutorial_done_step4": false,
 		"current_difficulty": current_difficulty,
 		"difficulty_modifiers": difficulty_modifiers,
 		"ng_plus_count": ng_plus_count,
@@ -1599,6 +1701,10 @@ func _show_day() -> void:
 	if _dx_debug_probe_phase:
 		_dx_debug_probe_count += 1
 		print("DEBUG _show_day probe call #", _dx_debug_probe_count)
+	# M13 narrative-hooks: snapshot current allies BEFORE _end_night runs, so
+	# the night report (success or failure) can diff joined/left/lost against
+	# this baseline. previous_allies is declared at module scope (line ~161).
+	previous_allies = allies.duplicate(true)
 	phase = "day"
 	_clear_card_layer()
 	card_layer.visible = true
@@ -3493,8 +3599,25 @@ func _show_night_report(success: bool, body: String) -> void:
 	status_label.text = "第 %d 夜 · %s%s" % [night_index + 1, night_title, (" · 成功" if success else " · 失败")]
 	prompt_label.text = learning_goal
 
-	# Body text in log area; append the hotspot status summary + per-night stats.
+	# M13 narrative-hooks: render a 3-line "log-style" body at the top of the
+	# report (above the rich stats block). Three lines = 当夜事件 / 幸存者状态
+	# / Victor 破碎广播. Reads `previous_allies` snapshot (taken at the start
+	# of _show_day) to diff joined/left/lost.
+	var narrative_lines: Array[String] = []
+	# Line 1: 当夜事件 — the existing per-night success/failure report text
+	# (already a single-line summary sourced from level data via `body`).
+	narrative_lines.append("· " + body)
+	# Line 2: 幸存者状态 — diff current `allies` against `previous_allies`.
+	narrative_lines.append("· " + _format_narrative_allies_diff(previous_allies, allies))
+	# Line 3: Victor 破碎广播 — keyed by current night (1..10).
+	var victor_n: int = clamp(night_index + 1, 1, 10)
+	narrative_lines.append("· " + I18n.t("report_victor_log_%d" % victor_n))
+
+	# Body text in log area; narrative 3-line header + hotspot status summary + per-night stats.
 	var summary_lines: Array = []
+	for nl in narrative_lines:
+		summary_lines.append(nl)
+	summary_lines.append("")
 	summary_lines.append("--- 战况 ---")
 	for id in hotspots:
 		var h: Dictionary = hotspots[id]
@@ -3566,6 +3689,62 @@ func _on_report_continue(success: bool) -> void:
 	else:
 		# Retry the same night
 		_show_night()
+
+
+# M13 narrative-hooks: format the "幸存者状态" line for the night report.
+# Diffs `prev` (snapshot taken at the start of _show_day) against `cur`
+# (current `allies` dict) and returns a single localized line listing joined /
+# left / lost allies. Falls back to the generic `log_ally_join` template
+# (with %s) when a per-NPC i18n key isn't present. For "left" / "lost" the
+# M15 prep did not introduce per-NPC keys, so we compose "{name} 离开" /
+# "{name} 牺牲" from the existing `report_survivors_*` labels.
+func _format_narrative_allies_diff(prev: Dictionary, cur: Dictionary) -> String:
+	var joined_parts: Array[String] = []
+	var left_parts: Array[String] = []
+	var keys: Array = []
+	for k in prev.keys():
+		keys.append(str(k))
+	for k in cur.keys():
+		var ks: String = str(k)
+		if not keys.has(ks):
+			keys.append(ks)
+	for k_id in keys:
+		var was_in: bool = bool(prev.get(k_id, false))
+		var is_in: bool = bool(cur.get(k_id, false))
+		var label: String = _narrative_ally_label(k_id)
+		if not was_in and is_in:
+			joined_parts.append(I18n.t("log_ally_join", [label]))
+		elif was_in and not is_in:
+			left_parts.append("%s %s" % [label, I18n.t("report_survivors_left", [])])
+	if joined_parts.is_empty() and left_parts.is_empty():
+		# No ally changes — short summary instead of empty line.
+		return "%s：—" % I18n.t("report_survivors_joined", [])
+	var parts: Array[String] = []
+	if not joined_parts.is_empty():
+		parts.append("%s：%s" % [I18n.t("report_survivors_joined", []), " / ".join(joined_parts)])
+	if not left_parts.is_empty():
+		parts.append("%s：%s" % [I18n.t("report_survivors_left", []), " / ".join(left_parts)])
+	return " · ".join(parts)
+
+
+# M13 narrative-hooks: best-effort localized name for an ally id used in the
+# narrative diff line. Falls back to the id itself when no label exists.
+func _narrative_ally_label(ally_id: String) -> String:
+	match ally_id:
+		"nora":
+			return "Nora"
+		"elias":
+			return "Elias"
+		"victor":
+			return "Victor"
+		"lily":
+			return "Lily"
+		"daniel":
+			return "Daniel"
+		"tom":
+			return "Tom"
+		_:
+			return ally_id
 
 
 # ============================================================================
