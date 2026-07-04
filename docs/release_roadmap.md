@@ -138,8 +138,7 @@
 | M14 | 25 张 day card body 独白化 (zh 先) | 1d | ✅ (新 commit) | polish spec §6.3 |
 | M11 | NPC AI 接进主循环 + 软锁定 + zombie 视觉强化 | 2d | 🔜 | polish spec §4 / §5 |
 | M12 | NPC sprite + 顶部状态条 | 1d | 🔜 | polish spec §4.3 / §4.4 / §5 |
-| M13 | Cover / Tutorial Step 4 / Night Report 日志化 | 2d | 🔜 | polish spec §6 |
-| M14 | 25 张 day card body 独白化 (zh 先) | 1d | 🔜 | polish spec §6.3 |
+| M13 | Cover / Tutorial Step 4 / Night Report 日志化 | 2d | ✅ `f0b88db` | polish spec §6 |
 | M15 | 章节延展：角色来去 + Victor 失联 | 2d | 🔜 | polish spec §3 / §6.4 |
 
 **预计总工时**：8 天。详见 polish spec §9。

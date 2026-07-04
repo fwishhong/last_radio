@@ -13,10 +13,26 @@ working notes (those stay in the branch session's scratchpad).
 - Solo-dev release target: Steam (zh/en, 18 RMB, single chapter).
 - M1–M10 milestones all shipped (see `docs/release_roadmap.md`).
   Current focus: 可玩性 / 视觉 / 特效 深化 (playability, visual, FX polish).
-- Save schema is v3 (compat v1/v2). Any save change bumps the version
-  and adds a migration branch in `scripts/NightShiftSave.gd`.
-- 18 headless test suites in `tools/` are the regression gate (~593
-  assertions). Canonical loop is in `AGENTS.md` → Setup commands.
+- Save schema is currently **v5** (bumped from v4 in M13). Compat
+  v1/v2/v3/v4 via migration branches in `scripts/NightShiftSave.gd`.
+- **22** headless test suites in `tools/` are the regression gate
+  (18 base + 3 from M13: cover_monologue / tutorial_step4 /
+  night_report_log — ~646 assertions). Canonical loop is in
+  `AGENTS.md` → Setup commands.
+
+### Night-report has two render paths (M13 decision, 2026-07-04)
+Type: design-decision
+A "night report" screen can be rendered by two code paths:
+`NightShiftGame._show_night_report(...)` (inline, used in the
+10-night main flow) and `NightReport.gd` scene via `setup(...)`
+(BaseScreen round flow). Polish-spec §6 hooks that touch the night
+report (e.g. Hook C "3-line body") MUST be wired into **both**
+paths — wiring only one leaves the hook missing in the other mode.
+Hook C implementation: inline path consumes the
+`previous_allies = allies.duplicate(true)` snapshot taken at the
+start of `_show_day()`; scene path accepts optional
+`allies_before` / `current_allies` in `setup()` and renders the
+same 3-line block when both non-empty. Pinned by harness.
 
 ## Hard rules (apply to every rein)
 
