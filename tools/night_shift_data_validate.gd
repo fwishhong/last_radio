@@ -61,7 +61,7 @@ func _validate_cards(data: Dictionary) -> void:
 		_expect(id != "", "card has id")
 		_expect(not card_ids.has(id), "card id is unique: %s" % id)
 		card_ids[id] = true
-		_expect(["setup", "fortify", "rescue", "scavenge", "broadcast"].has(str(card.get("type", ""))), "card type is valid: %s" % id)
+		_expect(["setup", "fortify", "rescue", "scavenge", "broadcast", "people"].has(str(card.get("type", ""))), "card type is valid: %s" % id)
 		_expect(str(card.get("name", "")) != "", "card has name: %s" % id)
 		_expect(str(card.get("body", "")) != "", "card has body: %s" % id)
 		_validate_resource_map(card.get("cost", {}), "card cost %s" % id)
