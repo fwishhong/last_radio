@@ -8,46 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- M14: day-card body rewrite into first-person narrator monologues.
-  All 29 day cards in `data/night_shift/day_cards.json` now read as the
-  player narrator weighing each option in their head — short, tired,
-  practical (zh 30-60 字 / en 60-120 chars; no exclamations, no emojis,
-  no dashes; references the card's actual cost / gain / effects trade-
-  off). Voice: late-night solo defender on the edge of a dead city,
-  counting what each choice costs in planks, trust, and silence.
-  `tools/locale_e2e_test.gd` golden strings updated for `door_reinforce`
-  to lock the new monologues; 22/22 headless suites green (~706
-  assertions). polish spec §6.3.
-- M13.1: real art frames for the player repair-action sprite. The v0.5
-  drop-overlay tint (`player_repair_*.png` with alpha=0 pixels carrying
-  RGB 255/30/82 → colored halo around the player, polish spec §4.5) is
-  replaced with matrix-MCP-generated立绘 (clean-shaven 30s male, brown
-  leather jacket, dark jeans) restored to true RGBA via the new
-  `png_to_rgba.py` v6 (auto-detect checker palette from corner histogram
-  — handles matrix's varying checker palette: v1 125/185, v2 112/152,
-  v3 195/243, v4 80/124). `player_repair_token` is now a Sprite2D with
-  scale 0.12 (896×1200 source → ~144 px body, ~matches walk sprite
-  footprint) and is mutually exclusive with the M13 procedural hammer
-  sprite during repair (avoids double-drawing the hammer). Frame index
-  follows `PlayerRepairFx.repair_frame_for(player_repair_timer)` so the
-  3-frame cycle (start/mid/end on a 0.36 s loop, ~3 swings per repair
-  bar) drives both texture and timer. New `tools/m13_1_player_repair_test.gd`
-  with 13 assertions (3 loads + 3 bbox non-zero + 3 bbox real-size
-  + 3 PlayerRepairFx phase roundtrip + 1 luma consistency); new
-  `tools/capture_m13_1_player_repair.gd` writes the 3 single-frame
-  crops + a 3-up grid PNG to `user://last_radio_v2_m13_1_capture/` for
-  visual style-consistency review. 22/22 headless suites green.
-- M11.5: global audio mute. `Settings.DEFAULT_AUDIO_MUTED = true` so a
-  fresh launch starts muted — first launch / dev-debug runs no longer
-  bleed music + sfx into the room and disturb anyone nearby. Players
-  flip it off in Settings ▸ Audio (new Mute checkbox). CLI override
-  flags `--no-mute` / `--mute` / `--silent` / `--quiet` / `--audio` /
-  `--sound` work per-session without persisting. `MenuUI._apply_audio`
-  extended with `_apply_audio_mute` using `AudioServer.set_bus_mute`;
-  `NightShiftGame._ready` runs it once before `_build_ui` so the slot
-  picker doesn't briefly unmute. New `tools/night_shift_audio_mute_test.gd`
-  — 17 assertions covering default / persistence / MenuUI checkbox /
-  AudioServer bus state / CLI flag name recognition.
 - M13: art-based hammer replaces the procedural round-2.1 draw. New
   `assets/final/night_shift/player_hammer_art.png` (1024×1024 RGBA,
   AI-generated via matrix MCP text-to-image + `tools/png_to_rgba.py`
@@ -164,6 +124,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   walk frames + event icons + .res) was already on disk under
   `assets/final/night_shift/`, never generated in M12. M12 just wires
   it into the NPC state machine.
+
+## [v0.7-m14-m13.1-m11.5-done] - 2026-07-05
+
+### Added
+- M14: day-card body rewrite into first-person narrator monologues.
+  All 29 day cards in `data/night_shift/day_cards.json` now read as the
+  player narrator weighing each option in their head — short, tired,
+  practical (zh 30-60 字 / en 60-120 chars; no exclamations, no emojis,
+  no dashes; references the card's actual cost / gain / effects trade-
+  off). Voice: late-night solo defender on the edge of a dead city,
+  counting what each choice costs in planks, trust, and silence.
+  `tools/locale_e2e_test.gd` golden strings updated for `door_reinforce`
+  to lock the new monologues; 22/22 headless suites green (~706
+  assertions). polish spec §6.3. (commit `a0601a8`)
+- M13.1: real art frames for the player repair-action sprite. The v0.5
+  drop-overlay tint (`player_repair_*.png` with alpha=0 pixels carrying
+  RGB 255/30/82 → colored halo around the player, polish spec §4.5) is
+  replaced with matrix-MCP-generated立绘 (clean-shaven 30s male, brown
+  leather jacket, dark jeans) restored to true RGBA via the new
+  `png_to_rgba.py` v6 (auto-detect checker palette from corner histogram
+  — handles matrix's varying checker palette: v1 125/185, v2 112/152,
+  v3 195/243, v4 80/124). `player_repair_token` is now a Sprite2D with
+  scale 0.12 (896×1200 source → ~144 px body, ~matches walk sprite
+  footprint) and is mutually exclusive with the M13 procedural hammer
+  sprite during repair (avoids double-drawing the hammer). Frame index
+  follows `PlayerRepairFx.repair_frame_for(player_repair_timer)` so the
+  3-frame cycle (start/mid/end on a 0.36 s loop, ~3 swings per repair
+  bar) drives both texture and timer. New `tools/m13_1_player_repair_test.gd`
+  with 13 assertions (3 loads + 3 bbox non-zero + 3 bbox real-size
+  + 3 PlayerRepairFx phase roundtrip + 1 luma consistency); new
+  `tools/capture_m13_1_player_repair.gd` writes the 3 single-frame
+  crops + a 3-up grid PNG to `user://last_radio_v2_m13_1_capture/` for
+  visual style-consistency review. 22/22 headless suites green.
+  (commit `2c006ca`)
+- M11.5: global audio mute. `Settings.DEFAULT_AUDIO_MUTED = true` so a
+  fresh launch starts muted — first launch / dev-debug runs no longer
+  bleed music + sfx into the room and disturb anyone nearby. Players
+  flip it off in Settings ▸ Audio (new Mute checkbox). CLI override
+  flags `--no-mute` / `--mute` / `--silent` / `--quiet` / `--audio` /
+  `--sound` work per-session without persisting. `MenuUI._apply_audio`
+  extended with `_apply_audio_mute` using `AudioServer.set_bus_mute`;
+  `NightShiftGame._ready` runs it once before `_build_ui` so the slot
+  picker doesn't briefly unmute. New `tools/night_shift_audio_mute_test.gd`
+  — 17 assertions covering default / persistence / MenuUI checkbox /
+  AudioServer bus state / CLI flag name recognition.
+  (commit `de2c99d`)
+
+### Notes
+- Doc-only closeout batch — no code / data / scripts / assets touched.
+  All 3 entries were shipped on master prior to v0.7 and just hadn't
+  been moved out of `[Unreleased]`. Roadmap rows updated from
+  `(新 commit)` placeholder to specific SHAs (de2c99d / 2c006ca /
+  a0601a8). Tag forthcoming: `v0.7-m14-m13.1-m11.5-done`.
 
 ## [v0.6-m13-done] - 2026-07-05
 
