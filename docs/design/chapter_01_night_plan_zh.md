@@ -468,10 +468,13 @@ UI 不显示原始秒数，而显示 22:00 到 06:00 的夜间时钟和距天亮
 
 白天卡牌：
 
+- 追思 Tom（`tom_memorial`，B1 polish §7.6/§7.7 第一位）：Tom 在固定事件 `tom_death` 后留下的一页独白，无代价，信任 +1。是夜玩家第一眼看到的“白天卡牌”。
 - 拆看台木板：增加木板，提升暴露度或信任下降。
 - 双层窗撑：窗户被临时封住时撑更久。
 - 标记物资箱：仓库恢复更快。
 - 广播交换物资：获得木板/药品，暴露度上升。
+
+> 2026-07-05 B1 polish 收口：`tom_memorial` 插入到 night_08 day_cards 第一位；新增 13 个 i18n key（§7.6 NPC 来去 + §7.7 survivor 档案）。
 
 夜晚固定事件：
 
@@ -518,7 +521,12 @@ UI 不显示原始秒数，而显示 22:00 到 06:00 的夜间时钟和距天亮
 - 信号电瓶：停电时天线掉线速度降低。
 - 重走线缆：天线和电台修复更快，消耗零件。
 - 给 Elias 工具：Elias 自动处理电台/天线更快。
-- 伪装广播：降低暴露度，但外部支援减少。
+- 派搜救找 Victor（`victor_go_find`，B1 polish）：暴露度 +1，radio_response +2，附加 `noise` pressure tag。给援 Victor 一条正路。
+- 让 Victor 留在原地（`victor_stay`，B1 polish）：暴露度 -1，`npc_keep` Victor。不派人出去，但放弃这次接应。
+- 公开喊 Victor（`victor_broadcast`，B1 polish）：信任 +1 / 暴露度 +2 / `radio_window` +8。把 Victor 的名字扔进公开频段。
+- 对 Victor 也沉默（`victor_silent`，B1 polish，替换原 `keep_silent`）：暴露度 -1 / radio_response -1。跟踪者威胁下连 Victor 频段也静默。
+
+> 2026-07-05 B1 polish 收口：`keep_silent` 从 night_09 day_cards 删除，替换为 `victor_silent` 并新增 3 张 victor_* 卡。新增 13 个 i18n key（§7.6 NPC 来去 + §7.7 survivor 档案），与 night_08 同步合入 `tools/night_branch_content_test.gd` 验证。
 
 夜晚固定事件：
 

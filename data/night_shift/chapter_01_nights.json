@@ -142,7 +142,7 @@
       "duration": 180,
       "learning_goal": "学习仓库和木板资源。",
       "unlocked_hotspots": ["front_door", "left_window", "right_window", "back_door", "generator", "radio", "antenna", "medbay", "storage"],
-      "day_cards": ["salvage_planks", "double_brace", "victor_cache", "open_route"],
+      "day_cards": ["tom_memorial", "salvage_planks", "double_brace", "victor_cache", "open_route"],
       "fixed_events": [
         {"id": "storage_shortage", "time": 44, "type": "support", "target": "storage", "pressure": 1.5},
         {"id": "hard_push", "time": 96, "type": "director", "target": "barrier"},
@@ -159,7 +159,7 @@
       "duration": 180,
       "learning_goal": "学习暴露度反噬，以及电力、天线、电台链条。",
       "unlocked_hotspots": ["front_door", "left_window", "right_window", "back_door", "generator", "radio", "antenna", "medbay", "storage"],
-      "day_cards": ["signal_battery", "cable_route", "elias_tools", "keep_silent"],
+      "day_cards": ["signal_battery", "cable_route", "elias_tools", "victor_go_find", "victor_stay", "victor_broadcast", "victor_silent"],
       "fixed_events": [
         {"id": "antenna_blackout_link", "time": 72, "type": "support", "target": "antenna", "pressure": 1.8},
         {"id": "radio_call_3", "time": 82, "type": "radio", "target": "radio"},

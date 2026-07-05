@@ -256,5 +256,18 @@
   "report_victor_log_10": "不管今晚怎样，明早我都在这频段。",
   "report_survivors_joined": "加入",
   "report_survivors_left": "离开",
-  "report_survivors_lost": "牺牲"
+  "report_survivors_lost": "牺牲",
+  "log_ally_join_nora": "Nora 加入",
+  "log_ally_join_elias": "Elias 加入",
+  "log_ally_join_lily": "Lily 加入",
+  "log_ally_join_tom": "Tom 加入",
+  "log_ally_left_daniel": "Daniel 离开",
+  "log_ally_lost_tom": "Tom 牺牲",
+  "log_victor_lost": "Victor 失联",
+  "survivor_nora_brief": "老楼一楼窗边守了八年的人。今夜合到队里。",
+  "survivor_elias_brief": "曾在空管塔值班的实习生，电池和线路他比谁都熟。",
+  "survivor_lily_brief": "校园里最后走出来的孩子。我告诉她，今晚别站在灯下。",
+  "survivor_tom_brief": "背着木板和零件从废墟走回来的人。背包里的东西从来没空过。",
+  "survivor_daniel_brief": "肩伤还没好就往体育馆走的人。我说，先别走南边。",
+  "survivor_victor_brief": "城西楼顶的广播员。信号从那里传到体育馆，今晚也一样。"
 }
