@@ -94,11 +94,19 @@ var summary_strip: HBoxContainer
 var event_list: VBoxContainer
 var action_button: Button
 var counter_label: Label
+# M13 narrative-hooks: optional allies snapshot pair. When both are passed
+# (non-empty), _build_ui renders a 3-line "log-style" body (当夜事件 /
+# 幸存者状态 / Victor 破碎广播) above the existing event replay. When empty
+# (the BaseScreen round report path), the original event-card list is shown.
+var allies_before: Dictionary = {}
+var current_allies: Dictionary = {}
 
-func setup(day: int, lines: Array, finished: bool, new_events: Array = [], new_summary: Dictionary = {}) -> void:
+func setup(day: int, lines: Array, finished: bool, new_events: Array = [], new_summary: Dictionary = {}, new_allies_before: Dictionary = {}, new_current_allies: Dictionary = {}) -> void:
 	current_day = day
 	finished_slice = finished
 	summary = new_summary.duplicate(true)
+	allies_before = new_allies_before.duplicate(true)
+	current_allies = new_current_allies.duplicate(true)
 	events.clear()
 	for entry in new_events:
 		events.append(entry.duplicate(true))
@@ -273,6 +281,23 @@ func _refresh_replay_state() -> void:
 		return
 	for child in event_list.get_children():
 		child.queue_free()
+	# M13 narrative-hooks: when allies_before + current_allies are both
+	# non-empty, render the 3-line log body instead of the per-event replay
+	# cards. The board still highlights the most recent event so the visual
+	# focus is preserved.
+	var use_narrative_body: bool = (not allies_before.is_empty()) and (not current_allies.is_empty())
+	if use_narrative_body:
+		event_list.add_child(_narrative_body_block())
+		var max_visible: int = min(visible_count, events.size())
+		var current: Dictionary = events[max_visible - 1]
+		board.active_facility = str(current.get("facility", "base"))
+		board.active_severity = str(current.get("severity", "neutral"))
+		board.event_index = max_visible - 1
+		board.total_events = events.size()
+		board.queue_redraw()
+		counter_label.text = "%d / %d" % [max_visible, events.size()]
+		action_button.text = _final_button_text() if visible_count >= events.size() else "继续回放"
+		return
 	var max_visible: int = min(visible_count, events.size())
 	for i in range(max_visible):
 		event_list.add_child(_event_card(events[i], i == max_visible - 1))
@@ -284,6 +309,84 @@ func _refresh_replay_state() -> void:
 	board.queue_redraw()
 	counter_label.text = "%d / %d" % [max_visible, events.size()]
 	action_button.text = _final_button_text() if visible_count >= events.size() else "继续回放"
+
+
+# M13 narrative-hooks: 3-line "log-style" body block (当夜事件 / 幸存者状态 /
+# Victor 破碎广播). ~80px tall, monospace-ish via theme override.
+func _narrative_body_block() -> Control:
+	var block := VBoxContainer.new()
+	block.add_theme_constant_override("separation", 4)
+	block.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var line1_text: String = "· "
+	if not events.is_empty():
+		var head_event: Dictionary = events[0]
+		line1_text += str(head_event.get("body", ""))
+	else:
+		line1_text += "（今晚没有事件）"
+	var line2_text: String = "· " + _format_narrative_allies_diff_local(allies_before, current_allies)
+	var line3_text: String = "· " + I18n.t("report_victor_log_%d" % clamp(current_day, 1, 10))
+
+	for line_text in [line1_text, line2_text, line3_text]:
+		var label := Label.new()
+		label.text = line_text
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.add_theme_font_size_override("font_size", 15)
+		label.add_theme_color_override("font_color", Color(0.86, 0.94, 0.90))
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		block.add_child(label)
+	return block
+
+
+# M13 narrative-hooks: same format as NightShiftGame._format_narrative_allies_diff
+# but lives here so the BaseScreen night report can render it without
+# pulling in the entire NightShiftGame state. When per-NPC i18n keys exist
+# (post-M15 data layer) this will use them; today only the generic
+# `log_ally_join` template exists so we fall back to "{name} 离开" / "{name} 牺牲".
+func _format_narrative_allies_diff_local(prev: Dictionary, cur: Dictionary) -> String:
+	var joined_parts: Array[String] = []
+	var left_parts: Array[String] = []
+	var keys: Array = []
+	for k in prev.keys():
+		keys.append(str(k))
+	for k in cur.keys():
+		var ks: String = str(k)
+		if not keys.has(ks):
+			keys.append(ks)
+	for k_id in keys:
+		var was_in: bool = bool(prev.get(k_id, false))
+		var is_in: bool = bool(cur.get(k_id, false))
+		var label: String = _narrative_ally_label_local(k_id)
+		if not was_in and is_in:
+			joined_parts.append(I18n.t("log_ally_join", [label]))
+		elif was_in and not is_in:
+			left_parts.append("%s %s" % [label, I18n.t("report_survivors_left", [])])
+	if joined_parts.is_empty() and left_parts.is_empty():
+		return "%s：—" % I18n.t("report_survivors_joined", [])
+	var parts: Array[String] = []
+	if not joined_parts.is_empty():
+		parts.append("%s：%s" % [I18n.t("report_survivors_joined", []), " / ".join(joined_parts)])
+	if not left_parts.is_empty():
+		parts.append("%s：%s" % [I18n.t("report_survivors_left", []), " / ".join(left_parts)])
+	return " · ".join(parts)
+
+
+func _narrative_ally_label_local(ally_id: String) -> String:
+	match ally_id:
+		"nora":
+			return "Nora"
+		"elias":
+			return "Elias"
+		"victor":
+			return "Victor"
+		"lily":
+			return "Lily"
+		"daniel":
+			return "Daniel"
+		"tom":
+			return "Tom"
+		_:
+			return ally_id
 
 func _advance_replay() -> void:
 	if visible_count < events.size():

@@ -25,7 +25,12 @@ const SLOT_COUNT := 3
 # v4: adds current_difficulty (String) + difficulty_modifiers (Dictionary).
 #     The integer DIFFICULTY_NORMAL/HARD field is kept for legacy v3 saves
 #     (read-only); writes always use the new shape.
-const SAVE_VERSION := 4
+# v5: adds tutorial_done_step4 (Boolean) — M13 narrative-hooks save flag for
+#     the new tutorial step 4 ("tune to Victor's frequency"). Backwards
+#     compatible: read() defaults to false if the field is absent, write()
+#     always emits the field. No migration needed (same .get(..., false)
+#     pattern as tutorial_done in v3→v4).
+const SAVE_VERSION := 5
 
 # Difficulty presets and per-axis modifiers.
 #
@@ -186,9 +191,28 @@ static func read(slot: int = 1) -> Dictionary:
 	if not parsed is Dictionary:
 		return {}
 	var doc: Dictionary = parsed
+	# M13: forward-migrate older v4 docs in place. v4 → v5 only adds
+	# `tutorial_done_step4` (Boolean, default false) — the rest of the
+	# shape is identical. We rewrite the slot file so subsequent reads
+	# don't take the migration branch.
+	if int(doc.get("version", 0)) == 4:
+		doc = migrate_v4_to_v5(doc)
+		var out := FileAccess.open(path, FileAccess.WRITE)
+		if out != null:
+			out.store_string(JSON.stringify(doc, "  "))
+			out.close()
 	if int(doc.get("version", 0)) != SAVE_VERSION:
 		push_warning("NightShiftSave: save version mismatch in slot %d (have %s, want %s)" % [slot, doc.get("version", 0), SAVE_VERSION])
 		return {}
+	return doc
+
+
+# v4 → v5: add tutorial_done_step4 (Boolean, default false).
+# Same in-place defaulting pattern as the existing tutorial_done v3→v4
+# migration; no field renames or removals.
+static func migrate_v4_to_v5(doc: Dictionary) -> Dictionary:
+	doc["version"] = SAVE_VERSION
+	doc["tutorial_done_step4"] = bool(doc.get("tutorial_done_step4", false))
 	return doc
 
 
@@ -274,6 +298,7 @@ static func migrate_legacy_if_needed() -> void:
 	# Default those to 0/false.
 	doc["version"] = SAVE_VERSION
 	doc["tutorial_done"] = bool(doc.get("tutorial_done", false))
+	doc["tutorial_done_step4"] = bool(doc.get("tutorial_done_step4", false))
 	doc["difficulty"] = int(doc.get("difficulty", DIFFICULTY_NORMAL))
 	doc["ng_plus_count"] = int(doc.get("ng_plus_count", 0))
 	# Write to slot 1
@@ -326,6 +351,7 @@ static func _build_body(state: Dictionary) -> Dictionary:
 		"radio_tuned_channel": str(state.get("radio_tuned_channel", "")),
 		"radio_contacts_made": int(state.get("radio_contacts_made", 0)),
 		"tutorial_done": bool(state.get("tutorial_done", false)),
+		"tutorial_done_step4": bool(state.get("tutorial_done_step4", false)),
 		"difficulty": difficulty,
 		"current_difficulty": difficulty_name,
 		"difficulty_modifiers": difficulty_modifiers,
