@@ -239,5 +239,18 @@
   "report_victor_log_10": "No matter what tonight brings, I'll be on this frequency come morning.",
   "report_survivors_joined": "Joined",
   "report_survivors_left": "Left",
-  "report_survivors_lost": "Lost"
+  "report_survivors_lost": "Lost",
+  "log_ally_join_nora": "Nora joined",
+  "log_ally_join_elias": "Elias joined",
+  "log_ally_join_lily": "Lily joined",
+  "log_ally_join_tom": "Tom joined",
+  "log_ally_left_daniel": "Daniel left",
+  "log_ally_lost_tom": "Tom was lost",
+  "log_victor_lost": "Victor went dark",
+  "survivor_nora_brief": "Eight years on the ground-floor windows; she finally joins the crew tonight.",
+  "survivor_elias_brief": "Ex air-traffic-tower intern; he knows batteries and wiring better than anyone here.",
+  "survivor_lily_brief": "The last kid out of the school grounds. I told her, never stand under the lamp.",
+  "survivor_tom_brief": "The one who walks out of the rubble with planks and parts. His pack is never empty.",
+  "survivor_daniel_brief": "Walked toward the gym before his shoulder healed. I told him, don't go south.",
+  "survivor_victor_brief": "The rooftop voice from the west side. From his antenna to the gym, tonight no different."
 }
