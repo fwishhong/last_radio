@@ -1,0 +1,60 @@
+feat(i18n): M15 polish B4b — §7.6+7.7 narrative hooks + survivor briefs
+
+Adds 13 polish-spec §7.6 + §7.7 i18n keys (zh + en paired) and wires them
+into NightShiftGame._format_narrative_allies_diff + the NightReport mirror
+so per-NPC narrative lines take priority over the generic template.
+
+Files:
+- data/i18n/{zh,en}.json    13 new keys (7 §7.6 + 6 §7.7).
+- scripts/NightShiftGame.gd _format_narrative_allies_diff extended with
+                              per-NPC key preference (join/left/lost) +
+                              distinct "lost" routing (was collapsed into
+                              "left" before). Adds private _i18n_has helper
+                              for cheap dict-membership checks.
+- scripts/NightReport.gd   _format_narrative_allies_diff_local mirror
+                              updated with the same logic — keeps the
+                              BaseScreen world from drifting.
+- tools/narrative_diff_test.gd  new — 22 assertions, 8 TC groups covering
+                              per-NPC preference, lost routing, unknown
+                              fallback, en locale switch, survivor_brief
+                              parity for all 6 NPCs, log_victor_lost,
+                              NightReport mirror.
+- tools/npc_ai_status_test.gd   TC name flipped: was "fallback when no
+                              brief", now "uses brief when present" (B4b
+                              brought the keys, the test had to track).
+- AGENTS.md                  canonical gate 21 → 22 suites.
+- CHANGELOG.md + docs/release_roadmap.md  status flip.
+
+Key additions (zh / en):
+  §7.6 NPC Join / Left / Lost (7):
+    log_ally_join_nora     - "Nora 从城市废墟里赶来……" / "Nora arrived..."
+    log_ally_join_elias    - "Elias 调着收音机钻进来……" / "Elias came in tuning..."
+    log_ally_join_lily     - "Lily 缩在门边……" / "Lily is pressed against..."
+    log_ally_join_tom      - "Tom 拍了拍门框……" / "Tom knocked on the doorframe..."
+    log_ally_left_daniel   - "Daniel 走了……" / "Daniel left..."
+    log_ally_lost_tom      - "Tom 没回来。" / "Tom didn't come back."
+    log_victor_lost        - "Victor 失联了……" / "Victor is gone..."
+
+  §7.7 Survivor 档案 (6):
+    survivor_nora_brief    - "前护士" / "Ex-nurse"
+    survivor_elias_brief   - "无线电爱好者" / "HAM radio hobbyist"
+    survivor_lily_brief    - "高中生" / "High-schooler"
+    survivor_tom_brief     - "退伍兵" / "Ex-military"
+    survivor_daniel_brief  - "普通人" / "Civilian"
+    survivor_victor_brief  - "城西楼顶" / "Rooftop, west side"
+
+Routing changes:
+  - was_in=False, is_in=True  → per-NPC join (or generic "%s 加入")
+  - was_in=True, is_in=False  → per-NPC left OR per-NPC lost (routed to
+                                separate "lost" bucket when the lost key
+                                exists; previously all departures landed
+                                in the left bucket). Generic "{name} 离开"
+                                remains as ultimate fallback.
+
+These keys feed:
+  - NightShiftGame + NightReport night report narrative lines (this PR)
+  - NpcStatusBar per-NPC display name fallback (lands in B4a's bar; the
+    bar truncates briefs to <= 12 chars + "…" to keep rows from wrapping)
+
+Headless gate: 22/22 green (21 existing + narrative_diff_test 22
+assertions). No regressions.

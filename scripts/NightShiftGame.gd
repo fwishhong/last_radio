@@ -3707,16 +3707,23 @@ func _on_report_continue(success: bool) -> void:
 		_show_night()
 
 
-# M13 narrative-hooks: format the "幸存者状态" line for the night report.
-# Diffs `prev` (snapshot taken at the start of _show_day) against `cur`
-# (current `allies` dict) and returns a single localized line listing joined /
-# left / lost allies. Falls back to the generic `log_ally_join` template
-# (with %s) when a per-NPC i18n key isn't present. For "left" / "lost" the
-# M15 prep did not introduce per-NPC keys, so we compose "{name} 离开" /
-# "{name} 牺牲" from the existing `report_survivors_*` labels.
+# M13 narrative-hooks (extended in M15 polish B4b): format the
+# "幸存者状态" line for the night report. Diffs `prev` (snapshot taken at
+# the start of _show_day) against `cur` (current `allies` dict) and
+# returns a single localized line listing joined / left / lost allies.
+#
+# Per-NPC key preference (polish spec §7.6):
+#   joined:  prefer `log_ally_join_<id>` (e.g. "Nora 从城市废墟里赶来……")
+#            fallback to generic `log_ally_join` template "%s 加入"
+#   left:    prefer `log_ally_left_<id>` (e.g. "Daniel 走了……")
+#            fallback to "{name} {report_survivors_left}"
+#   lost:    prefer `log_ally_lost_<id>` (e.g. "Tom 没回来")
+#            fallback to "{name} {report_survivors_lost}"
+#   victor_lost synthetic event feeds `log_victor_lost`.
 func _format_narrative_allies_diff(prev: Dictionary, cur: Dictionary) -> String:
 	var joined_parts: Array[String] = []
 	var left_parts: Array[String] = []
+	var lost_parts: Array[String] = []
 	var keys: Array = []
 	for k in prev.keys():
 		keys.append(str(k))
@@ -3729,10 +3736,20 @@ func _format_narrative_allies_diff(prev: Dictionary, cur: Dictionary) -> String:
 		var is_in: bool = bool(cur.get(k_id, false))
 		var label: String = _narrative_ally_label(k_id)
 		if not was_in and is_in:
-			joined_parts.append(I18n.t("log_ally_join", [label]))
+			joined_parts.append(_narrative_ally_join_line(k_id, label))
 		elif was_in and not is_in:
-			left_parts.append("%s %s" % [label, I18n.t("report_survivors_left", [])])
-	if joined_parts.is_empty() and left_parts.is_empty():
+			# Distinguish "left voluntarily" from "lost (died)" — polish
+			# spec treats these as distinct narrative beats even though
+			# the runtime just clears the flag for both.
+			var left_key := "log_ally_left_%s" % k_id
+			var lost_key := "log_ally_lost_%s" % k_id
+			if _i18n_has(left_key):
+				left_parts.append(I18n.t(left_key))
+			elif _i18n_has(lost_key):
+				lost_parts.append(I18n.t(lost_key))
+			else:
+				left_parts.append("%s %s" % [label, I18n.t("report_survivors_left", [])])
+	if joined_parts.is_empty() and left_parts.is_empty() and lost_parts.is_empty():
 		# No ally changes — short summary instead of empty line.
 		return "%s：—" % I18n.t("report_survivors_joined", [])
 	var parts: Array[String] = []
@@ -3740,7 +3757,28 @@ func _format_narrative_allies_diff(prev: Dictionary, cur: Dictionary) -> String:
 		parts.append("%s：%s" % [I18n.t("report_survivors_joined", []), " / ".join(joined_parts)])
 	if not left_parts.is_empty():
 		parts.append("%s：%s" % [I18n.t("report_survivors_left", []), " / ".join(left_parts)])
+	if not lost_parts.is_empty():
+		parts.append("%s：%s" % [I18n.t("report_survivors_lost", []), " / ".join(lost_parts)])
 	return " · ".join(parts)
+
+
+# Per-NPC join line: prefer `log_ally_join_<id>`; fall back to the generic
+# `log_ally_join` template with the localised label.
+func _narrative_ally_join_line(k_id: String, label: String) -> String:
+	var per_npc_key := "log_ally_join_%s" % k_id
+	if _i18n_has(per_npc_key):
+		return I18n.t(per_npc_key)
+	return I18n.t("log_ally_join", [label])
+
+
+# Cheap dict-membership check against the active locale. We avoid calling
+# `I18n.t()` directly because it returns the key string as ultimate
+# fallback — we'd rather render the generic template than "log_ally_join_nora"
+# verbatim.
+func _i18n_has(key: String) -> bool:
+	if not I18n.dicts.has(I18n.locale):
+		return false
+	return (I18n.dicts[I18n.locale] as Dictionary).has(key)
 
 
 # M13 narrative-hooks: best-effort localized name for an ally id used in the

@@ -338,14 +338,16 @@ func _narrative_body_block() -> Control:
 	return block
 
 
-# M13 narrative-hooks: same format as NightShiftGame._format_narrative_allies_diff
-# but lives here so the BaseScreen night report can render it without
-# pulling in the entire NightShiftGame state. When per-NPC i18n keys exist
-# (post-M15 data layer) this will use them; today only the generic
-# `log_ally_join` template exists so we fall back to "{name} 离开" / "{name} 牺牲".
+# M13 narrative-hooks (M15 polish B4b extension): same format as
+# NightShiftGame._format_narrative_allies_diff but lives here so the
+# BaseScreen night report can render it without pulling in the entire
+# NightShiftGame state. Per-NPC i18n keys (log_ally_join_<id>,
+# log_ally_left_<id>, log_ally_lost_<id>) are preferred when present;
+# falls back to the generic templates otherwise.
 func _format_narrative_allies_diff_local(prev: Dictionary, cur: Dictionary) -> String:
 	var joined_parts: Array[String] = []
 	var left_parts: Array[String] = []
+	var lost_parts: Array[String] = []
 	var keys: Array = []
 	for k in prev.keys():
 		keys.append(str(k))
@@ -358,16 +360,29 @@ func _format_narrative_allies_diff_local(prev: Dictionary, cur: Dictionary) -> S
 		var is_in: bool = bool(cur.get(k_id, false))
 		var label: String = _narrative_ally_label_local(k_id)
 		if not was_in and is_in:
-			joined_parts.append(I18n.t("log_ally_join", [label]))
+			var join_key := "log_ally_join_%s" % k_id
+			if _i18n_has_local(join_key):
+				joined_parts.append(I18n.t(join_key))
+			else:
+				joined_parts.append(I18n.t("log_ally_join", [label]))
 		elif was_in and not is_in:
-			left_parts.append("%s %s" % [label, I18n.t("report_survivors_left", [])])
-	if joined_parts.is_empty() and left_parts.is_empty():
+			var left_key := "log_ally_left_%s" % k_id
+			var lost_key := "log_ally_lost_%s" % k_id
+			if _i18n_has_local(left_key):
+				left_parts.append(I18n.t(left_key))
+			elif _i18n_has_local(lost_key):
+				lost_parts.append(I18n.t(lost_key))
+			else:
+				left_parts.append("%s %s" % [label, I18n.t("report_survivors_left", [])])
+	if joined_parts.is_empty() and left_parts.is_empty() and lost_parts.is_empty():
 		return "%s：—" % I18n.t("report_survivors_joined", [])
 	var parts: Array[String] = []
 	if not joined_parts.is_empty():
 		parts.append("%s：%s" % [I18n.t("report_survivors_joined", []), " / ".join(joined_parts)])
 	if not left_parts.is_empty():
 		parts.append("%s：%s" % [I18n.t("report_survivors_left", []), " / ".join(left_parts)])
+	if not lost_parts.is_empty():
+		parts.append("%s：%s" % [I18n.t("report_survivors_lost", []), " / ".join(lost_parts)])
 	return " · ".join(parts)
 
 
@@ -387,6 +402,13 @@ func _narrative_ally_label_local(ally_id: String) -> String:
 			return "Tom"
 		_:
 			return ally_id
+
+
+# Cheap dict-membership check against the active locale.
+func _i18n_has_local(key: String) -> bool:
+	if not I18n.dicts.has(I18n.locale):
+		return false
+	return (I18n.dicts[I18n.locale] as Dictionary).has(key)
 
 func _advance_replay() -> void:
 	if visible_count < events.size():
