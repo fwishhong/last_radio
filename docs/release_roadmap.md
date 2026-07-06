@@ -141,5 +141,6 @@
 | M13 | Cover / Tutorial Step 4 / Night Report 日志化 | 2d | ✅ `9e3bfec` (#2) | polish spec §6 |
 | M15 | 章节延展：角色来去 + Victor 失联 | 2d | 🔜 | polish spec §3 / §6.4 |
 | B3 | spec dependency-graph tool (`tools/spec_depgraph.gd` + lib + test) | 0.25d | ✅ `feat/b3-spec-depgraph` | polish spec 全章节 → JSON |
+| B4a | §4.4 NPC UI 状态条 (`scripts/NpcStatusBar.gd` + 4 i18n + test) | 0.5d | 🔜 `feat/b4a-npc-status-bar` | polish spec §4.4 |
 
 **预计总工时**：8 天。详见 polish spec §9。

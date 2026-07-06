@@ -13,6 +13,7 @@ const Fx := preload("res://scripts/NightShiftFx.gd")
 const FxLayer := preload("res://scripts/FxLayerNode.gd")
 const WorldFx := preload("res://scripts/WorldLayerFx.gd")
 const PlayerRepairFx := preload("res://scripts/PlayerRepairFx.gd")
+const NpcStatusBar := preload("res://scripts/NpcStatusBar.gd")
 
 # Effect tuning knobs. The two "lead time" / "grace" knobs are defaults —
 # runtime values come from difficulty_modifiers so casual/hard/custom
@@ -228,6 +229,7 @@ var _pending_report_music: bool = false
 var flash_rect: ColorRect  # blackout / danger pulse
 var radio_panel: Panel  # contact progress panel (only visible at the radio)
 var radio_progress_bar: ColorRect
+var npc_status_bar: NpcStatusBar  # polish spec §4.4 — top-of-screen NPC status rows
 var menu_ui  # MenuUI instance (CanvasLayer), see _build_menu_ui
 var tutorial_overlay  # TutorialOverlay instance (CanvasLayer), see _build_tutorial_overlay
 # Cached state for re-rendering after locale switch. _show_night_report is
@@ -694,6 +696,15 @@ func _build_ui() -> void:
 	log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	log_label.add_theme_constant_override("outline_size", 3)
 	hud_layer.add_child(log_label)
+
+	# NPC UI status bar (polish spec §4.4). Top-of-screen Panel that lists
+	# each joined NPC with portrait + name + status text. Hidden when no
+	# ally is in the rotation; refreshed after each _tick_npcs evaluation.
+	npc_status_bar = NpcStatusBar.new()
+	npc_status_bar.position = Vector2(0, 0)
+	npc_status_bar.size = Vector2(SCREEN_SIZE.x, 56)
+	npc_status_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_layer.add_child(npc_status_bar)
 
 	hotspot_layer = Node2D.new()
 	canvas.add_child(hotspot_layer)
@@ -2944,6 +2955,11 @@ func _tick_npcs(delta: float) -> void:
 					hp["breach_timer"] = -1.0
 				hotspots[tgt_id] = hp
 		npc_state[npc_id] = st
+	# Refresh the §4.4 status bar from the just-ticked state. Cheap (label
+	# text + position update only); runs on the same 0.2s cadence as the
+	# tick itself so we don't churn Panel allocations per frame.
+	if npc_status_bar != null:
+		npc_status_bar.refresh(allies, npc_state, float(resources.get("trust", 3.0)))
 
 
 func _update_player_movement(delta: float) -> void:

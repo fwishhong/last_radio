@@ -12,7 +12,7 @@ Godot 4.3-stable GDScript project targeting Steam release (zh/en, 18 RMB, single
   the project is verified on 4.3-stable; the API surface used is compatible.
 - Run game (windowed):  `godot_console.exe --path .`
 - Run game (headless):   `godot_console.exe --headless --path .`
-- Run all headless tests (20 suites, ~647 assertions — the canonical regression gate):
+- Run all headless tests (21 suites, ~664 assertions — the canonical regression gate):
   ```powershell
   $exe = "C:\Users\Administrator\godot_console.exe"
   foreach ($t in @(
@@ -21,7 +21,8 @@ Godot 4.3-stable GDScript project targeting Steam release (zh/en, 18 RMB, single
       "late_hotspot_enemy_test","night_report_stats_test","radio_contact_test",
       "night_shift_full_flow_test","signal_catalog_test","menu_ui_test",
       "save_slots_test","tutorial_test","i18n_test","locale_e2e_test",
-      "night_shift_fx_test","ampersand_lint_test","spec_depgraph_test"
+      "night_shift_fx_test","ampersand_lint_test","spec_depgraph_test",
+      "npc_ai_status_test"
   )) { & $exe --headless --path . --script "res://tools/$t.gd" }
   ```
   `ampersand_lint_test` is a defensive CI gate — fails if any `.gd` file under
