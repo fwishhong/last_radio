@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- feat(tooling): M15 polish B3 — spec dependency-graph tool. Parses a
+  markdown spec (defaults to `docs/design/last_radio_v2_polish_spec.md`),
+  walks every `##` / `###` / `####` section, and emits a per-section
+  dependency map (scripts / scenes / data / i18n keys / assets /
+  tests / captures) plus a cross-reference block listing orphan
+  scripts, ghost scripts, i18n keys unused in the spec, and sections
+  with no extracted refs. New files: `tools/spec_depgraph.gd` (SceneTree
+  entry, default `--out .harness/scratch/polish_depgraph.json`),
+  `tools/spec_depgraph_lib.gd` (RefCounted static helpers, no I/O),
+  `tools/spec_depgraph_test.gd` (54 assertions: fixture parsing +
+  classification + cross-ref + real-spec round-trip). Added to the
+  canonical 20-suite headless gate in `AGENTS.md`. Pure meta-tool — no
+  gameplay, no new i18n keys, no data file edits.
 - M13: art-based hammer replaces the procedural round-2.1 draw. New
   `assets/final/night_shift/player_hammer_art.png` (1024×1024 RGBA,
   AI-generated via matrix MCP text-to-image + `tools/png_to_rgba.py`

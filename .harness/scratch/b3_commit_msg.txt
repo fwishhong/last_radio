@@ -1,0 +1,30 @@
+feat(tooling): M15 polish B3 — spec dependency-graph tool
+
+Parses the polish spec (defaults to docs/design/last_radio_v2_polish_spec.md)
+section by section and emits a per-section dependency map covering scripts,
+scenes, data files, i18n keys, assets, tests, and capture scripts, plus a
+cross-reference rollup (orphan scripts, ghost scripts, unused i18n keys,
+sections with no refs).
+
+Files:
+- tools/spec_depgraph.gd        SceneTree entry; --spec/--out/--no-write flags
+- tools/spec_depgraph_lib.gd    RefCounted static helpers; no I/O
+- tools/spec_depgraph_test.gd   54 assertions: fixture parsing + classification
+                                + cross-ref + real-spec round-trip
+
+Wiring:
+- Added spec_depgraph_test to the canonical 20-suite headless gate in
+  AGENTS.md (19 -> 20 suites, ~593 -> ~647 assertions).
+- CHANGELOG.md: Unreleased / Added entry.
+- docs/release_roadmap.md: current-focus row + status flip.
+
+Sample run (godot --headless --path . --script tools/spec_depgraph.gd) writes
+~25 KB JSON to .harness/scratch/polish_depgraph.json with 61 sections + 4
+cross-ref signals (scripts_orphan: 0, scripts_ghost: 27 [mostly infra],
+i18n_keys_unused_in_spec: 226 [baseline runtime keys not in polish scope],
+sections_with_no_refs: 38 [narrative bible / decisions / walkthrough]).
+
+Pure meta-tool: no gameplay, no i18n, no data edits. Lives in tools/ next to
+the existing night_shift_data_probe and audit_night_shift_assets ad-hoc
+helpers, but gains a permanent gate seat because it's the only one that
+guards the polish spec's section-to-file contract.
