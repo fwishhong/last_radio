@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- feat(npc): M15 polish B4a — §4.4 NPC UI status bar (top-of-screen Panel
+  with per-NPC portrait + name + status row). New `scripts/NpcStatusBar.gd`
+  (`Control` view, `refresh(allies, npc_state, trust)` is the single entry
+  point). 4 new i18n keys: `npc_status_emergency` / `_walking` / `_idle` /
+  `_low_trust` (zh + en paired). Status priority matches spec: low trust
+  (<2) overrides everything → 信任告急; then `target != ""` + walk_timer
+  ≤ 0 → 救急中; then walk_timer > 0 → 赶路中; else 待命. Bar hides itself
+  when `allies` has no entry that's both true and present in `npc_state`.
+  Refresh wired into `NightShiftGame._tick_npcs` (same 0.2s cadence as the
+  AI tick — no separate Timer). Portrait fallback to tinted color swatch
+  when `portrait_<id>.png` is missing (Lily / Tom not yet shipped — M15 art
+  pass). New `tools/npc_ai_status_test.gd` — 17 assertions, 7 TC groups
+  covering initial hidden / visible-with-ally / 4 status states in priority
+  order / locale switch zh↔en / stale row teardown / name fallback.
+  Canonical headless gate now 21 suites.
 - feat(tooling): M15 polish B3 — spec dependency-graph tool. Parses a
   markdown spec (defaults to `docs/design/last_radio_v2_polish_spec.md`),
   walks every `##` / `###` / `####` section, and emits a per-section
