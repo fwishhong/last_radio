@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- feat(i18n): M15 polish B4b — §7.6+7.7 narrative hooks + survivor briefs.
+  13 new polish-spec i18n keys (zh + en paired): 7 §7.6 NPC join/left/lost
+  (`log_ally_join_<nora,elias,lily,tom>`, `log_ally_left_daniel`,
+  `log_ally_lost_tom`, `log_victor_lost`) + 6 §7.7 survivor briefs
+  (`survivor_<nora,elias,lily,tom,daniel,victor>_brief`).
+  `NightShiftGame._format_narrative_allies_diff` and
+  `NightReport._format_narrative_allies_diff_local` now prefer per-NPC
+  keys when present, fall back to generic `log_ally_join` /
+  `report_survivors_left` otherwise. "Lost" routing is now a separate
+  bucket — was previously collapsed into "left" (tom's death previously
+  rendered as "Tom 离开"; now renders as "Tom 没回来" under the 牺牲
+  label). New `tools/narrative_diff_test.gd` — 22 assertions, 8 TC
+  groups. Canonical headless gate now 22 suites.
 - feat(npc): M15 polish B4a — §4.4 NPC UI status bar (top-of-screen Panel
   with per-NPC portrait + name + status row). New `scripts/NpcStatusBar.gd`
   (`Control` view, `refresh(allies, npc_state, trust)` is the single entry

@@ -155,11 +155,20 @@ func _test_stale_row_teardown() -> void:
 
 
 func _test_name_fallback_when_no_brief() -> void:
-	print("[name fallback when no survivor_*_brief key]")
-	# Current locale (zh) does not have survivor_lily_brief yet — B4b is
-	# what brings it. The bar must render a readable fallback rather than
-	# the raw key string.
-	I18n.load_locale("zh")
+	print("[name uses survivor_*_brief when present (M15 B4b)]")
+	# B4b brought survivor_*_brief keys for all 6 NPCs. The bar now uses
+	# those instead of the plain English name. Verify lily (高中生 in zh)
+	# renders the brief, and verify the truncation logic for long briefs.
+	I18n.set_locale("zh")
 	_bar.refresh({"lily": true}, {"lily": {"target": "", "walk_timer": 0.0}}, 3.0)
 	var row: Dictionary = _bar._rows["lily"]
-	_expect(row["name_lbl"].text == "Lily", "lily name falls back to plain 'Lily' (got: %s)" % row["name_lbl"].text)
+	_expect(row["name_lbl"].text == "高中生", "zh lily uses survivor_lily_brief = 高中生 (got: %s)" % row["name_lbl"].text)
+	I18n.set_locale("en")
+	_bar.refresh({"lily": true}, {"lily": {"target": "", "walk_timer": 0.0}}, 3.0)
+	row = _bar._rows["lily"]
+	# "High-schooler" is 13 chars — the bar truncates to <= 12 + "…" to
+	# keep the row from wrapping. Verify both: starts with "High-school"
+	# and ends with "…".
+	_expect(row["name_lbl"].text.begins_with("High-school"), "en lily row starts with 'High-school' (got: %s)" % row["name_lbl"].text)
+	_expect(row["name_lbl"].text.ends_with("…"), "en lily row ends with truncation marker (got: %s)" % row["name_lbl"].text)
+	I18n.set_locale("zh")

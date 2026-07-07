@@ -142,5 +142,6 @@
 | M15 | 章节延展：角色来去 + Victor 失联 | 2d | 🔜 | polish spec §3 / §6.4 |
 | B3 | spec dependency-graph tool (`tools/spec_depgraph.gd` + lib + test) | 0.25d | ✅ `feat/b3-spec-depgraph` | polish spec 全章节 → JSON |
 | B4a | §4.4 NPC UI 状态条 (`scripts/NpcStatusBar.gd` + 4 i18n + test) | 0.5d | 🔜 `feat/b4a-npc-status-bar` | polish spec §4.4 |
+| B4b | §7.6+7.7 i18n hooks 13 keys + 接入 narrative diff | 0.25d | 🔜 `feat/b4b-narrative-hooks` | polish spec §7.6 / §7.7 |
 
 **预计总工时**：8 天。详见 polish spec §9。
