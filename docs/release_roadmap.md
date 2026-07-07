@@ -140,8 +140,27 @@
 | M12 | NPC sprite + 顶部状态条 | 1d | 🔜 | polish spec §4.3 / §4.4 / §5 |
 | M13 | Cover / Tutorial Step 4 / Night Report 日志化 | 2d | ✅ `9e3bfec` (#2) | polish spec §6 |
 | M15 | 章节延展：角色来去 + Victor 失联 | 2d | 🔜 | polish spec §3 / §6.4 |
-| B3 | spec dependency-graph tool (`tools/spec_depgraph.gd` + lib + test) | 0.25d | ✅ `feat/b3-spec-depgraph` | polish spec 全章节 → JSON |
-| B4a | §4.4 NPC UI 状态条 (`scripts/NpcStatusBar.gd` + 4 i18n + test) | 0.5d | 🔜 `feat/b4a-npc-status-bar` | polish spec §4.4 |
-| B4b | §7.6+7.7 i18n hooks 13 keys + 接入 narrative diff | 0.25d | 🔜 `feat/b4b-narrative-hooks` | polish spec §7.6 / §7.7 |
+| B3 | spec dependency-graph tool (`tools/spec_depgraph.gd` + lib + test) | 0.25d | ✅ `d27db64` (#6) | polish spec 全章节 → JSON |
+| B4a | §4.4 NPC UI 状态条 (`scripts/NpcStatusBar.gd` + 4 i18n + test) | 0.5d | ✅ `3636be6` (#7) | polish spec §4.4 |
+| B4b | §7.6+7.7 i18n hooks 13 keys + 接入 narrative diff | 0.25d | ✅ `b23c12c` (#9) | polish spec §7.6 / §7.7 |
+| B1+B2 | runtime hooks for day-card effects + NPC lifecycle (radio_response / night_pressure_tag / npc_keep / npc_remove + was_ever_with_us + SAVE v6 + 49-assertion test) | 1.5d | ✅ `1c22eb4` (#5) | polish spec §3 / §4.4 / §6.4 |
+| B2-fix | i18n dedup of B4b duplicate per-NPC keys (Godot JSON last-occ-wins → first-occ-wins) | 0.05d | ✅ `5cba152` | polish spec §7.6 / §7.7 |
 
-**预计总工时**：8 天。详见 polish spec §9。
+**预计总工时**：8 天。**实际**：~7.5 天。详见 polish spec §9。
+
+## M15 polish closeout (2026-07-07)
+
+Polish backlog B1–B4b shipped through PR series #5–#9. Master at `1c22eb4`,
+canonical 25-suite headless gate green (21 AGENTS.md + 4 polish-specific).
+
+Merged in order: #6 (B3 spec depgraph) → #7 (B4a NPC status bar) → #9
+(B4b narrative hooks i18n) → #5 (B2 runtime hooks, rebased + dedup fix).
+
+B2 rebase onto post-B3/B4a/B4b master resolved a `_format_narrative_allies_diff`
+conflict by keeping B2's signature (`was_ever_with_us_now` parameter) and
+adopting B4b's `_i18n_has` helper for cleaner locale-aware key lookup.
+
+One bug surfaced + fixed during merge: B4b's commit had accidentally added
+the per-NPC narrative + survivor brief keys twice in both zh.json and en.json;
+Godot's JSON parser uses the last occurrence, silently overriding the intended
+values. `5cba152` drops the trailing duplicates.

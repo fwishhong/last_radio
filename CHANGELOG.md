@@ -8,6 +8,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- feat(runtime): M15 polish B2 — runtime hooks for day-card effects + NPC
+  lifecycle. `NightShiftDayEffects` gains 4 new SUPPORTED_IDs
+  (`radio_response`, `night_pressure_tag`, `npc_keep`, `npc_remove`) +
+  matching getters (`get_radio_response_delta`,
+  `get_night_pressure_tags`, `get_npc_keep`, `get_npc_remove`) +
+  `summarize()` branch + `tag` field captured at `add_from_card`.
+  `NightShiftGame.allies` / `previous_allies` extend to the full NPC
+  roster `{nora, elias, victor, lily, daniel, tom}`; new
+  `was_ever_with_us` monotonic dict drives the `tom_memorial`
+  `requires_unlocked` gate (was-ever-present, not currently-present).
+  `_card_unlocked_for_now` accepts ally ids in `requires_unlocked` when
+  `was_ever_with_us[id]` is true so tom_memorial stays pickable on the
+  day after night 8's tom_death. `_load_state_from_doc` defensively
+  merges the wider allies shape + restores `was_ever_with_us`.
+  `_on_day_card_pressed` applies `npc_remove` effect immediately at the
+  pick site. `_show_night` applies `day_effects.get_radio_response_delta()`
+  into `radio_window_left` via `_trigger_event("radio")` and injects a
+  synthetic `victor_lost` event on `night_index==8` (night 9). The data
+  layer doesn't declare it so `chapter_01_nights.json` stays untouched.
+  `_trigger_event` handles new event types `npc_loss` (with
+  `_handle_npc_loss_event` for trust_delta + `was_ever_with_us`) and
+  `victor_lost` (respects `day_effects.get_npc_keep("victor")` via the
+  victor_stay card). `_end_night` `success_unlocks` loop now handles
+  the full NPC roster (was hard-coded to nora+elias only); each join
+  also sets `was_ever_with_us[id]=true`. `_show_night_report` 3-line
+  narrative body uses per-NPC i18n keys (`log_ally_join_<id>`,
+  `log_ally_left_<id>`, `log_ally_lost_<id>`) with a 3rd-party label
+  fallback; survivor briefs (`survivor_<id>_brief`) render as indented
+  sublines. `NightReport.gd` mirror updates keep the BaseScreen world in
+  lock-step. `NightShiftSave.gd` SAVE_VERSION bumped v5 → v6 with
+  `was_ever_with_us` Dictionary field; v5 → v6 forward migration in
+  `read()` preserves an empty default. New `tools/m15_runtime_hook_test.gd`
+  — 49 assertions, 10 TC groups covering SUPPORTED_IDs extension, getters,
+  per-NPC narrative key preference + lost branch, survivor briefs panel
+  mount, tom_memorial was_ever_with_us gate (3 cases), victor_lost
+  synthetic event (3 cases: pinned, unpinned, enqueue on night 9), and
+  zh/en i18n key parity. Canonical 25-suite headless gate green.
 - feat(i18n): M15 polish B4b — §7.6+7.7 narrative hooks + survivor briefs.
   13 new polish-spec i18n keys (zh + en paired): 7 §7.6 NPC join/left/lost
   (`log_ally_join_<nora,elias,lily,tom>`, `log_ally_left_daniel`,
@@ -113,6 +150,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   state tracking.
 
 ### Fixed
+- i18n dedup of M15 polish B4b per-NPC narrative + survivor brief keys.
+  B4b's commit `22da735` accidentally added the new keys twice in both
+  `data/i18n/zh.json` and `data/i18n/en.json` — once at the top of the
+  file (intended values) and once at the bottom (residue from a prior
+  edit). Godot's JSON parser uses the LAST occurrence for duplicate keys,
+  which silently overrode the intended values: `log_ally_join_nora`
+  resolved to `"Nora 加入"` instead of the full narrative
+  `"Nora 从城市废墟里赶来。她带着药箱，话不多，但眼神很稳。"`;
+  `log_victor_lost` collapsed to `"Victor 失联"` (lost the descriptive
+  trailing line); `survivor_lily_brief` resolved to the long narrative
+  version `"校园里最后走出来的孩子。我告诉她，今晚别站在灯下。"`
+  instead of the status-bar-shaped `"高中生"`. Caught by
+  `narrative_diff_test.gd` (5 failures: per-NPC join/left/lost full-
+  sentence checks) and `npc_ai_status_test.gd` (2 failures:
+  survivor_lily_brief value check + truncation marker). Drop the
+  trailing duplicate block from both locale files; the intentional
+  values at the top of each file are now the active ones. 25/25 headless
+  test suites green after fix. (commit `5cba152`)
 - Round 2.1: hammer swing over-arm thrust 1.4 → 1.8 rad (~103° max forward
   swing, vs ~80° previously) so the strike carries visibly more weight and
   the recovery arc reads longer. Hammer `HANDLE_COLOR` brightened from
