@@ -312,7 +312,9 @@ func _refresh_replay_state() -> void:
 
 
 # M13 narrative-hooks: 3-line "log-style" body block (当夜事件 / 幸存者状态 /
-# Victor 破碎广播). ~80px tall, monospace-ish via theme override.
+# Victor 破碎广播) + B2 polish survivor briefs (one localized one-liner
+# per ally currently present). ~80px tall base; briefs extend the block
+# proportionally. Monospace-ish via theme override.
 func _narrative_body_block() -> Control:
 	var block := VBoxContainer.new()
 	block.add_theme_constant_override("separation", 4)
@@ -326,8 +328,16 @@ func _narrative_body_block() -> Control:
 		line1_text += "（今晚没有事件）"
 	var line2_text: String = "· " + _format_narrative_allies_diff_local(allies_before, current_allies)
 	var line3_text: String = "· " + I18n.t("report_victor_log_%d" % clamp(current_day, 1, 10))
+	var lines: Array = [line1_text, line2_text, line3_text]
+	# B2 polish: append survivor briefs as indented sub-lines below the
+	# 3-line block. The base screen renders them as separate labels
+	# (one per brief) so each can wrap independently.
+	var briefs_text: String = _format_survivor_briefs_local(current_allies)
+	if briefs_text != "":
+		for brief_line in briefs_text.split("\n"):
+			lines.append(brief_line)
 
-	for line_text in [line1_text, line2_text, line3_text]:
+	for line_text in lines:
 		var label := Label.new()
 		label.text = line_text
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -338,12 +348,14 @@ func _narrative_body_block() -> Control:
 	return block
 
 
-# M13 narrative-hooks (M15 polish B4b extension): same format as
+# M13 narrative-hooks (M15 polish B2 + B4b extension): same format as
 # NightShiftGame._format_narrative_allies_diff but lives here so the
 # BaseScreen night report can render it without pulling in the entire
 # NightShiftGame state. Per-NPC i18n keys (log_ally_join_<id>,
 # log_ally_left_<id>, log_ally_lost_<id>) are preferred when present;
-# falls back to the generic templates otherwise.
+# falls back to the generic templates otherwise. Uses _i18n_has_local
+# (cheap dict-membership check) added in B4b for the locale-aware
+# fallback semantics. Lock-step with NightShiftGame.gd.
 func _format_narrative_allies_diff_local(prev: Dictionary, cur: Dictionary) -> String:
 	var joined_parts: Array[String] = []
 	var left_parts: Array[String] = []
@@ -384,6 +396,24 @@ func _format_narrative_allies_diff_local(prev: Dictionary, cur: Dictionary) -> S
 	if not lost_parts.is_empty():
 		parts.append("%s：%s" % [I18n.t("report_survivors_lost", []), " / ".join(lost_parts)])
 	return " · ".join(parts)
+
+
+# B2 polish: survivor briefs, mirroring NightShiftGame._show_night_report.
+# One localized one-liner per ally currently in `current_allies`. Reads
+# the `survivor_<id>_brief` i18n key (data layer shipped 6: nora,
+# elias, lily, tom, daniel, victor). Silently skipped when the key is
+# missing or empty.
+func _format_survivor_briefs_local(cur: Dictionary) -> String:
+	var lines: Array[String] = []
+	for k_id in cur.keys():
+		if not bool(cur.get(k_id, false)):
+			continue
+		var brief_key: String = "survivor_%s_brief" % str(k_id)
+		var brief_text: String = I18n.t(brief_key, [])
+		if brief_text == brief_key or brief_text == "":
+			continue
+		lines.append("  · %s——%s" % [_narrative_ally_label_local(str(k_id)), brief_text])
+	return "\n".join(lines)
 
 
 func _narrative_ally_label_local(ally_id: String) -> String:

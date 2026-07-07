@@ -155,11 +155,36 @@ var resources: Dictionary = {}  # {planks, parts, battery, medicine, exposure, t
 var upgrades: Dictionary = {}  # {card_id: true}
 var day_effects: NightShiftDayEffects = NightShiftDayEffects.new()
 var logs: Array = []  # recent log lines (max 6)
-var allies: Dictionary = {"nora": false, "elias": false, "victor": true}
+# B2 polish: full NPC roster — nora/elias join via the early chapters,
+# daniel/lily/tom from the mid/late chapters, victor stays present from
+# night 1 onward (radio contact, never a "joiner"). Default all to false
+# so save/load can detect first-appearance via was_ever_with_us below.
+var allies: Dictionary = {
+	"nora": false,
+	"elias": false,
+	"victor": true,
+	"lily": false,
+	"daniel": false,
+	"tom": false,
+}
 # M13 narrative-hooks: snapshot of allies taken at the start of each day
 # (in _show_day). The night report diffs current `allies` against this
 # snapshot to render the "幸存者状态" log line (joined / left / lost).
-var previous_allies: Dictionary = {"nora": false, "elias": false, "victor": true}
+var previous_allies: Dictionary = {
+	"nora": false,
+	"elias": false,
+	"victor": true,
+	"lily": false,
+	"daniel": false,
+	"tom": false,
+}
+# B2 polish: monotonic set of ally ids that have ever been true in `allies`
+# at any point in this run. Used by _card_unlocked_for_now so cards like
+# `tom_memorial` (requires_unlocked: ["tom"]) remain pickable on the day
+# AFTER Tom has been lost on night 8 (which sets allies["tom"] = false
+# but the memorial conversation still belongs to the player who knew him).
+# We only insert true keys; we never delete.
+var was_ever_with_us: Dictionary = {}
 var radio_available: bool = false
 var radio_completed: bool = false
 var radio_missed: bool = false
@@ -1643,8 +1668,36 @@ func _load_state_from_doc(doc: Dictionary) -> void:
 	upgrades.clear()
 	for k in doc.get("upgrades", {}):
 		upgrades[str(k)] = true
-	allies = (doc.get("allies", {"nora": false, "elias": false, "victor": true}) as Dictionary).duplicate(true)
-	unlocked_hotspots = []
+	# Defensively merge allies: v5 saves only had nora/elias/victor; v6
+	# saves (or any later run that touched lily/daniel/tom) get the same
+	# default set backfilled so the diff / lifecycle paths can rely on
+	# the keys being present. ally ids that aren't in the doc fall back
+	# to false (the safe default for the mid-game joins).
+	var base_allies := {
+		"nora": false, "elias": false, "victor": true,
+		"lily": false, "daniel": false, "tom": false,
+	}
+	var saved_allies: Variant = doc.get("allies", {})
+	if saved_allies is Dictionary:
+		for k in (saved_allies as Dictionary):
+			base_allies[str(k)] = bool((saved_allies as Dictionary)[k])
+	allies = base_allies.duplicate(true)
+	# B2 polish: was_ever_with_us is monotonic — we set the keys present
+	# in the doc to true and leave the rest absent. Reads via
+	# `_card_unlocked_for_now` use `.get(key, false)` so absent == false.
+	was_ever_with_us.clear()
+	var saved_was: Variant = doc.get("was_ever_with_us", {})
+	if saved_was is Dictionary:
+		for k in (saved_was as Dictionary):
+			if bool((saved_was as Dictionary)[k]):
+				was_ever_with_us[str(k)] = true
+	# Backfill: any ally currently true was obviously true at some past
+	# point too. This means the gate for tom_memorial becomes satisfiable
+	# even on a save that was written before v6 existed.
+	for k in allies:
+		if bool(allies.get(k, false)):
+			was_ever_with_us[k] = true
+	unlocked_hotspots = []	
 	for h in doc.get("unlocked_hotspots", []):
 		unlocked_hotspots.append(str(h))
 	radio_available = bool(doc.get("radio_available", false))
@@ -1683,7 +1736,15 @@ func _on_start_pressed() -> void:
 	night_index = 0
 	resources = data.initial_resource_values()
 	upgrades.clear()
-	allies = {"nora": false, "elias": false, "victor": true}
+	allies = {
+		"nora": false, "elias": false, "victor": true,
+		"lily": false, "daniel": false, "tom": false,
+	}
+	was_ever_with_us.clear()
+	# Victor is present from night 1 (he runs the rooftop radio feed), so
+	# the gate for any card with requires_unlocked:["victor"] is satisfied
+	# from the start of a new run.
+	was_ever_with_us["victor"] = true
 	_show_day()
 
 
@@ -1691,17 +1752,25 @@ func _on_start_pressed() -> void:
 # PHASE: day
 # ============================================================================
 
-# Day-card gate: a card with `requires_unlocked: ["antenna", ...]` only appears
-# once every hotspot in that list is in `unlocked_hotspots`. Prevents
-# "Anchor Antenna" / "Signal Battery" / "Re-route Cables" from showing on
-# night 3 before antenna unlocks. Cards without the field are unconstrained.
+# Day-card gate: a card with `requires_unlocked: [...]` only appears once
+# every entry in that list is satisfied. The list mixes two kinds of keys:
+#   - hotspot ids ("antenna", "right_window", ...): satisfied if the id
+#     is in `unlocked_hotspots`.
+#   - ally ids ("tom", "nora", ...): satisfied if `was_ever_with_us` has
+#     the key set to true (B2 polish — pre-M15 only the allies themselves
+#     checked, which made tom_memorial un-pickable on the day Tom dies).
+# Cards without the field are unconstrained.
 func _card_unlocked_for_now(card: Dictionary) -> bool:
 	var req: Variant = card.get("requires_unlocked", [])
 	if not (req is Array) or (req as Array).is_empty():
 		return true
 	for h in (req as Array):
-		if not unlocked_hotspots.has(str(h)):
-			return false
+		var key: String = str(h)
+		if unlocked_hotspots.has(key):
+			continue
+		if bool(was_ever_with_us.get(key, false)):
+			continue
+		return false
 	return true
 
 
@@ -1983,6 +2052,21 @@ func _on_day_card_pressed(card_id: String) -> void:
 	resources = data.apply_resource_delta(resources, card.get("gain", {}) as Dictionary)
 	upgrades[card_id] = true
 	day_effects.add_from_card(card)
+	# B2 polish: apply `npc_remove` effects at the pick site so the next
+	# _show_night starts with the ally gone. The day_effects getter
+	# `get_npc_remove(<id>)` is used downstream by the night report
+	# narrative diff; the `allies` mutation here is what flips the
+	# survivor state. Mark was_ever_with_us too — letting someone go
+	# still counts as having known them.
+	for eff in card.get("effects", []):
+		if not (eff is Dictionary):
+			continue
+		if str((eff as Dictionary).get("id", "")) == "npc_remove":
+			var target_id: String = str((eff as Dictionary).get("target", ""))
+			if target_id != "":
+				allies[target_id] = false
+				was_ever_with_us[target_id] = true
+				_log("%s 将离开。" % _narrative_ally_label(target_id))
 	_log("白天选择：%s" % str(card.get("name", card_id)))
 	_play_sfx("unlock")
 	# Persist after every choice
@@ -2112,7 +2196,24 @@ func _show_night() -> void:
 			"time": float(ev.get("time", 0.0)),
 			"type": str(ev.get("type", "warning")),
 			"target": str(ev.get("target", "")),
-			"pressure": float(ev.get("pressure", 0.0))
+			"pressure": float(ev.get("pressure", 0.0)),
+			"trust_delta": float(ev.get("trust_delta", 0.0)),
+		})
+	# B2 polish: synthetic `victor_lost` event on night 9 only
+	# (night_index == 8 zero-based). Picked up by _trigger_event which
+	# reads day_effects.get_npc_keep("victor") to decide whether the
+	# player should keep Victor connected or watch him go dark. Data
+	# layer doesn't declare this event so adding it here keeps the
+	# chapter_01_nights.json file untouched (B1 spec — runtime-only
+	# changes for B2).
+	if night_index == 8:
+		event_queue.append({
+			"id": "victor_lost_synthetic",
+			"time": night_duration * 0.45,
+			"type": "victor_lost",
+			"target": "victor",
+			"pressure": 0.0,
+			"trust_delta": 0.0,
 		})
 	event_queue.sort_custom(func(a, b): return a["time"] < b["time"])
 
@@ -2766,6 +2867,7 @@ func _save_progress() -> void:
 		"resources": resources,
 		"upgrades": upgrades,
 		"allies": allies,
+		"was_ever_with_us": was_ever_with_us,
 		"unlocked_hotspots": unlocked_hotspots,
 		"radio_available": radio_available,
 		"radio_completed": radio_completed,
@@ -2776,6 +2878,7 @@ func _save_progress() -> void:
 		"radio_tuned_channel": radio_tuned_channel,
 		"radio_contacts_made": radio_contacts_made,
 		"tutorial_done": current_slot > 0 and NightShiftSave.read(current_slot).get("tutorial_done", false),
+		"tutorial_done_step4": current_slot > 0 and NightShiftSave.read(current_slot).get("tutorial_done_step4", false),
 		"current_difficulty": current_difficulty,
 		"difficulty_modifiers": difficulty_modifiers,
 		"difficulty": NightShiftSave.DIFFICULTY_HARD if current_difficulty == "hard" else NightShiftSave.DIFFICULTY_NORMAL,
@@ -3257,14 +3360,36 @@ func _trigger_event(ev: Dictionary) -> void:
 	var target: String = ev["target"]
 	var pressure: float = float(ev["pressure"])
 
+	# B2 polish: synthetic `victor_lost` is an NPC-level event, not a
+	# hotspot-level one. Handle it at the top so we don't fall into the
+	# `not hotspots.has(target)` early return below (target is "victor",
+	# not a hotspot id).
+	if etype == "victor_lost":
+		if day_effects.get_npc_keep("victor"):
+			_log("Victor 继续在线。")
+		else:
+			allies["victor"] = false
+			_log(I18n.t("log_victor_lost", []))
+		return
+
 	if target == "player" or target == "":
 		# Global story beat (no hotspot attached)
 		match etype:
 			"radio":
 				radio_available = true
-				radio_window_left = 30.0 + day_effects.get_radio_window_bonus()
+				radio_window_left = 30.0 + day_effects.get_radio_window_bonus() + float(day_effects.get_radio_response_delta())
 				_play_sfx("radio_static")
 				_log("电台呼叫响起。")
+			"npc_loss":
+				# B2 polish: per-NPC loss event (e.g. tom_death on night 8).
+				# Reads `target` as the ally id, flips allies[target] = false,
+				# logs the localized `log_ally_lost_<id>` line if present
+				# (falls back to "log_ally_lost" + name), and trusts-down via
+				# the optional trust_delta field. Unlike "npc_remove" (driven
+				# by the let_daniel_go day-card choice), this fires from the
+				# event queue mid-night.
+				_handle_npc_loss_event(target, ev)
+				return
 			_:
 				_log("事件：%s" % ev["id"])
 		return
@@ -3291,9 +3416,32 @@ func _trigger_event(ev: Dictionary) -> void:
 		"radio":
 			h["active"] = true
 			radio_available = true
-			radio_window_left = 30.0 + day_effects.get_radio_window_bonus()
+			radio_window_left = 30.0 + day_effects.get_radio_window_bonus() + float(day_effects.get_radio_response_delta())
 			_play_sfx("radio_static")
 			_log("电台呼叫：%s" % _hotspot_label(target))
+
+
+# B2 polish: helper for type=="npc_loss" fixed events (e.g. tom_death on
+# night 8). The structured event payload includes `target` (ally id) and
+# optionally `trust_delta` (default 0). Always marks was_ever_with_us so
+# any post-mortem day-card (e.g. tom_memorial) remains pickable.
+func _handle_npc_loss_event(target: String, ev: Dictionary) -> void:
+	if target == "":
+		_log("事件：%s（同伴有伤亡）" % ev["id"])
+		return
+	allies[target] = false
+	was_ever_with_us[target] = true
+	var trust_delta: float = float(ev.get("trust_delta", 0.0))
+	if trust_delta < 0.0:
+		resources = data.apply_resource_delta(resources, {"trust": trust_delta})
+	# Prefer the per-NPC key from the B1 data layer; fall back to the
+	# generic join template if a particular NPC doesn't get its own.
+	var label: String = _narrative_ally_label(target)
+	var per_key: String = "log_ally_lost_%s" % target
+	var text: String = I18n.t(per_key, [])
+	if text == per_key:
+		text = I18n.t("log_ally_join", [label])
+	_log(text)
 
 
 func _update_visual_feedback() -> void:
@@ -3495,12 +3643,29 @@ func _end_night(success: bool) -> void:
 	var night_def: Dictionary = data.get_night(night_index)
 	if success:
 		resources = data.apply_resource_delta(resources, {"trust": 1})
-		# Apply success_unlocks (e.g. nora / right_window / radio / elias / antenna)
+		# Apply success_unlocks — handles both npc ids (nora/elias/lily/
+		# daniel/tom) and hotspot ids (right_window/back_door/radio/
+		# antenna/medbay/storage). All ally joins also flip
+		# was_ever_with_us so the corresponding card gates
+		# (tom_memorial etc.) stay satisfiable for the rest of the run.
+		#
+		# Two NPC init positions (Nora right flank, Elias left flank) are
+		# kept as the v0.5 defaults; mid/late-game joins use a coarse
+		# fallback position so they show up on the base board. Per-NPC
+		# runtime AI tuning is out of scope for B2.
+		const NPC_INIT_POS := {
+			"nora": Vector2(800.0, 360.0),
+			"elias": Vector2(480.0, 360.0),
+			"lily": Vector2(560.0, 420.0),
+			"daniel": Vector2(720.0, 420.0),
+			"tom": Vector2(640.0, 300.0),
+		}
 		for unlock in night_def.get("success_unlocks", []):
 			var u: String = str(unlock)
-			if u in ["nora", "elias"]:
+			if u in ["nora", "elias", "lily", "daniel", "tom"]:
 				if not bool(allies.get(u, false)):
 					allies[u] = true
+					was_ever_with_us[u] = true
 					if u == "nora" and not _ach_recruit_nora:
 						_ach_recruit_nora = true
 						_unlock_ach("recruit_nora")
@@ -3511,21 +3676,18 @@ func _end_night(success: bool) -> void:
 						if not _ach_all_three:
 							_ach_all_three = true
 							_unlock_ach("all_three_allies")
-					_log("%s 加入" % ("Nora" if u == "nora" else "Elias"))
-					# Initialise runtime state for the new NPC. Default position
-					# mirrors spec §4.5 — Nora on the right flank, Elias on the left.
-					if u == "nora" and not npc_state.has("nora"):
-						npc_state["nora"] = {
-							"pos": Vector2(800.0, 360.0),
-							"target": "",
-							"commit_timer": 0.0,
-							"walk_timer": 0.0,
-							"eval_timer": 0.2,
-							"speed": 180.0,
-						}
-					elif u == "elias" and not npc_state.has("elias"):
-						npc_state["elias"] = {
-							"pos": Vector2(480.0, 360.0),
+					# Per-NPC key from the B1 data layer (log_ally_join_<id>),
+					# with a fallback to the generic join template.
+					var per_join: String = "log_ally_join_%s" % u
+					var join_text: String = I18n.t(per_join, [])
+					if join_text == per_join:
+						join_text = _narrative_ally_label(u) + " 加入"
+					_log(join_text)
+					# Initialise runtime state for the new NPC.
+					if not npc_state.has(u):
+						var init_pos: Vector2 = NPC_INIT_POS.get(u, Vector2(640.0, 360.0))
+						npc_state[u] = {
+							"pos": init_pos,
 							"target": "",
 							"commit_timer": 0.0,
 							"walk_timer": 0.0,
@@ -3623,16 +3785,33 @@ func _show_night_report(success: bool, body: String) -> void:
 	# Line 1: 当夜事件 — the existing per-night success/failure report text
 	# (already a single-line summary sourced from level data via `body`).
 	narrative_lines.append("· " + body)
-	# Line 2: 幸存者状态 — diff current `allies` against `previous_allies`.
-	narrative_lines.append("· " + _format_narrative_allies_diff(previous_allies, allies))
+	# Line 2: 幸存者状态 — diff current `allies` against `previous_allies`,
+	# passing `was_ever_with_us` so the diff can distinguish "left" vs
+	# "lost" when per-NPC i18n keys are missing (B2 polish).
+	narrative_lines.append("· " + _format_narrative_allies_diff(previous_allies, allies, was_ever_with_us))
 	# Line 3: Victor 破碎广播 — keyed by current night (1..10).
 	var victor_n: int = clamp(night_index + 1, 1, 10)
 	narrative_lines.append("· " + I18n.t("report_victor_log_%d" % victor_n))
 
-	# Body text in log area; narrative 3-line header + hotspot status summary + per-night stats.
+	# Body text in log area; narrative 3-line header + survivor briefs
+	# (B2 polish) + hotspot status summary + per-night stats.
 	var summary_lines: Array = []
 	for nl in narrative_lines:
 		summary_lines.append(nl)
+	# B2 polish: survivor briefs — one localized one-liner per ally
+	# who currently has allies[ally_id] == true. Reads the
+	# `survivor_<id>_brief` i18n key (data layer added 6 — nora,
+	# elias, lily, tom, daniel, victor). Falls back silently when a
+	# particular ally doesn't have a brief yet (so the night report
+	# still renders even on partial translations).
+	for ally_id in allies:
+		if not bool(allies.get(ally_id, false)):
+			continue
+		var brief_key: String = "survivor_%s_brief" % ally_id
+		var brief_text: String = I18n.t(brief_key, [])
+		if brief_text == brief_key or brief_text == "":
+			continue
+		summary_lines.append("  · %s——%s" % [_narrative_ally_label(ally_id), brief_text])
 	summary_lines.append("")
 	summary_lines.append("--- 战况 ---")
 	for id in hotspots:
@@ -3707,12 +3886,21 @@ func _on_report_continue(success: bool) -> void:
 		_show_night()
 
 
-# M13 narrative-hooks (extended in M15 polish B4b): format the
-# "幸存者状态" line for the night report. Diffs `prev` (snapshot taken at
-# the start of _show_day) against `cur` (current `allies` dict) and
-# returns a single localized line listing joined / left / lost allies.
+# M13 narrative-hooks: format the "幸存者状态" line for the night report.
+# M15 polish B2 + B4b (rebased): per-NPC key preference. For each ally
+# that transitioned false→true we look up `log_ally_join_<id>` first
+# (data layer added nora/elias/lily/tom); for true→false we look up
+# `log_ally_left_<id>` (only daniel today) and as a sibling
+# `log_ally_lost_<id>` is checked when the per-NPC key is present.
+# Falling back: generic `log_ally_join` template for joins,
+# and `report_survivors_*` labels for left/lost.
 #
-# Per-NPC key preference (polish spec §7.6):
+# `was_ever_with_us_now` is the in-memory monotonic set; it tells us
+# whether a missing ally is a normal "left" (e.g. daniel via
+# let_daniel_go on night 7) or a permanent "lost" (tom_death on night 8).
+# We pass it via the third arg so the function stays pure.
+#
+# Per-NPC key preference (polish spec 7.6):
 #   joined:  prefer `log_ally_join_<id>` (e.g. "Nora 从城市废墟里赶来……")
 #            fallback to generic `log_ally_join` template "%s 加入"
 #   left:    prefer `log_ally_left_<id>` (e.g. "Daniel 走了……")
@@ -3720,7 +3908,7 @@ func _on_report_continue(success: bool) -> void:
 #   lost:    prefer `log_ally_lost_<id>` (e.g. "Tom 没回来")
 #            fallback to "{name} {report_survivors_lost}"
 #   victor_lost synthetic event feeds `log_victor_lost`.
-func _format_narrative_allies_diff(prev: Dictionary, cur: Dictionary) -> String:
+func _format_narrative_allies_diff(prev: Dictionary, cur: Dictionary, was_ever_with_us_now: Dictionary = {}) -> String:
 	var joined_parts: Array[String] = []
 	var left_parts: Array[String] = []
 	var lost_parts: Array[String] = []
@@ -3736,13 +3924,20 @@ func _format_narrative_allies_diff(prev: Dictionary, cur: Dictionary) -> String:
 		var is_in: bool = bool(cur.get(k_id, false))
 		var label: String = _narrative_ally_label(k_id)
 		if not was_in and is_in:
+			# Per-NPC join key (data layer added nora/elias/lily/tom).
 			joined_parts.append(_narrative_ally_join_line(k_id, label))
 		elif was_in and not is_in:
-			# Distinguish "left voluntarily" from "lost (died)" — polish
-			# spec treats these as distinct narrative beats even though
-			# the runtime just clears the flag for both.
-			var left_key := "log_ally_left_%s" % k_id
-			var lost_key := "log_ally_lost_%s" % k_id
+			# Distinguish "left voluntarily" from "lost (died)". Source
+			# of truth is was_ever_with_us_now: if the ally has been
+			# present in this run before, the missing branch can mean
+			# either left (came back is impossible) or lost (permanent
+			# removal via npc_loss). Data layer uses per-NPC keys to
+			# disambiguate: `log_ally_lost_<id>` for tom_death-style
+			# permanent removals, `log_ally_left_<id>` for daniel-style
+			# voluntary departures. Fall back to the generic
+			# `report_survivors_*` labels.
+			var left_key: String = "log_ally_left_%s" % k_id
+			var lost_key: String = "log_ally_lost_%s" % k_id
 			if _i18n_has(left_key):
 				left_parts.append(I18n.t(left_key))
 			elif _i18n_has(lost_key):

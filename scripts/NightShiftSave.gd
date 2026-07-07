@@ -30,7 +30,15 @@ const SLOT_COUNT := 3
 #     compatible: read() defaults to false if the field is absent, write()
 #     always emits the field. No migration needed (same .get(..., false)
 #     pattern as tutorial_done in v3→v4).
-const SAVE_VERSION := 5
+# v6: adds was_ever_with_us (Dictionary) — B2 polish monotonic ally
+#     history set. Used by `_card_unlocked_for_now` to keep day-card
+#     gates (e.g. tom_memorial requires_unlocked:["tom"]) satisfiable
+#     even when the current `allies[tom]` flipped false via night 8's
+#     `tom_death` npc_loss event. Backwards-compatible: existing v5
+#     saves are loaded as v6 by defaulting the field to an empty dict
+#     and back-filling any ally currently true (handled at the read
+#     site in NightShiftGame._load_state_from_doc).
+const SAVE_VERSION := 6
 
 # Difficulty presets and per-axis modifiers.
 #
@@ -201,6 +209,17 @@ static func read(slot: int = 1) -> Dictionary:
 		if out != null:
 			out.store_string(JSON.stringify(doc, "  "))
 			out.close()
+	# B2 polish: forward-migrate v5 → v6 in place. v6 adds
+	# `was_ever_with_us` (Dictionary, default empty) and the broader
+	# `allies` shape (nora/elias/victor/lily/daniel/tom). Ally backfill
+	# is done at the NightShiftGame read site (it has the per-key
+	# defaults) — Save just preserves the field with a sane default.
+	elif int(doc.get("version", 0)) == 5:
+		doc = migrate_v5_to_v6(doc)
+		var out := FileAccess.open(path, FileAccess.WRITE)
+		if out != null:
+			out.store_string(JSON.stringify(doc, "  "))
+			out.close()
 	if int(doc.get("version", 0)) != SAVE_VERSION:
 		push_warning("NightShiftSave: save version mismatch in slot %d (have %s, want %s)" % [slot, doc.get("version", 0), SAVE_VERSION])
 		return {}
@@ -213,6 +232,19 @@ static func read(slot: int = 1) -> Dictionary:
 static func migrate_v4_to_v5(doc: Dictionary) -> Dictionary:
 	doc["version"] = SAVE_VERSION
 	doc["tutorial_done_step4"] = bool(doc.get("tutorial_done_step4", false))
+	return doc
+
+
+# B2 polish: v5 → v6 migration. The `version` field flips to v6 and
+# `was_ever_with_us` becomes a (possibly empty) Dictionary. There's no
+# rename or removal — NightShiftGame._load_state_from_doc fills in
+# the per-ally defaults and back-fills any ally currently true.
+static func migrate_v5_to_v6(doc: Dictionary) -> Dictionary:
+	doc["version"] = SAVE_VERSION
+	var was: Variant = doc.get("was_ever_with_us", {})
+	if not (was is Dictionary):
+		was = {}
+	doc["was_ever_with_us"] = was
 	return doc
 
 
@@ -295,12 +327,18 @@ static func migrate_legacy_if_needed() -> void:
 	if int(doc.get("version", 0)) != 2:
 		return
 	# v2 has the same shape as v3 minus tutorial_done / difficulty / ng_plus_count.
-	# Default those to 0/false.
+	# Default those to 0/false. Bumped straight to SAVE_VERSION (currently v6)
+	# so the legacy path takes advantage of all in-flight migrations.
 	doc["version"] = SAVE_VERSION
 	doc["tutorial_done"] = bool(doc.get("tutorial_done", false))
 	doc["tutorial_done_step4"] = bool(doc.get("tutorial_done_step4", false))
 	doc["difficulty"] = int(doc.get("difficulty", DIFFICULTY_NORMAL))
 	doc["ng_plus_count"] = int(doc.get("ng_plus_count", 0))
+	# B2 polish: was_ever_with_us is empty for legacy v2 saves — the
+	# game state didn't track it. NightShiftGame._load_state_from_doc
+	# will back-fill on first load from the current `allies` snapshot.
+	if not doc.has("was_ever_with_us"):
+		doc["was_ever_with_us"] = {}
 	# Write to slot 1
 	if not DirAccess.dir_exists_absolute(SAVE_DIR):
 		var d := DirAccess.open(SAVE_DIR)
@@ -341,6 +379,7 @@ static func _build_body(state: Dictionary) -> Dictionary:
 		"resources": state.get("resources", {}),
 		"upgrades": state.get("upgrades", {}),
 		"allies": state.get("allies", {}),
+		"was_ever_with_us": state.get("was_ever_with_us", {}),
 		"unlocked_hotspots": state.get("unlocked_hotspots", []),
 		"radio_available": bool(state.get("radio_available", false)),
 		"radio_completed": bool(state.get("radio_completed", false)),

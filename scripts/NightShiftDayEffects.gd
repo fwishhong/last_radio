@@ -14,6 +14,27 @@ extends RefCounted
 #   radio_contact_goal: additive change to radio contact goal; (no target)
 #   radio_window     : additive bonus to radio contact window seconds; (no target)
 
+# Effect IDs introduced by B1 polish:
+#   radio_response       : additive int delta to tonight's radio window;
+#                          target field is unused. read via
+#                          get_radio_response_delta().
+#   night_pressure_tag   : adds a tag string ("noise", etc) to tonight's
+#                          pressure tag set; read via
+#                          get_night_pressure_tags(). M11 NPC AI will
+#                          consume this; for now it is exposed + summarized.
+#   npc_keep             : per-night pin — target=<ally_id> means "do not
+#                          let this ally be lost tonight" (e.g. Victor on
+#                          night 9 via the victor_stay day card).
+#                          read via get_npc_keep(<id>) -> bool.
+#   npc_remove           : per-night removal — target=<ally_id> means
+#                          "this ally is leaving tonight" (e.g. Daniel via
+#                          the let_daniel_go day card). Applied at the
+#                          pick site in NightShiftGame; queryable via
+#                          get_npc_remove(<id>) so the night report can
+#                          branch on it. (npc_remove was already in
+#                          data/night_shift/day_cards.json pre-B1 even
+#                          though it was not in SUPPORTED_IDS — the B2
+#                          runtime hook is what makes it actually fire.)
 const SUPPORTED_IDS := [
 	"barrier_pressure",
 	"barrier_cap",
@@ -27,10 +48,15 @@ const SUPPORTED_IDS := [
 	"nora_work_rate",
 	"elias_work_rate",
 	"helper_work_rate",
+	"radio_response",
+	"night_pressure_tag",
+	"npc_keep",
+	"npc_remove",
 ]
 
 
-# Each id -> { kind: "mult"|"add", target: String (""=global), value: float }
+# Each id -> { id, target, multiplier, bonus, value, tag }.
+# `tag` (String) is only set for night_pressure_tag; defaults to "".
 var entries: Array = []
 
 
@@ -50,6 +76,7 @@ func add_from_card(card: Dictionary) -> void:
 			"multiplier": float(item.get("multiplier", 1.0)),
 			"bonus": float(item.get("bonus", 0.0)),
 			"value": float(item.get("value", 0.0)),
+			"tag": str(item.get("tag", "")),
 		})
 
 
@@ -128,6 +155,67 @@ func get_radio_window_bonus() -> float:
 	return bonus
 
 
+# B2 polish: additive int delta applied on top of the radio_window bonus
+# whenever a radio contact event fires this night. Sourced from
+# `radio_response` effect entries (e.g. victor_go_find → +2 sec).
+func get_radio_response_delta() -> int:
+	var v := 0
+	for e in entries:
+		if e["id"] == "radio_response":
+			v += int(round(float(e["value"])))
+	return v
+
+
+# B2 polish: tag strings added to tonight's pressure tag set. Used by M11
+# NPC AI (future hook) to bias behavior. For now it is exposed + summarized
+# in the day panel so the QA can see it.
+func get_night_pressure_tags() -> Array[String]:
+	var out: Array[String] = []
+	for e in entries:
+		if e["id"] == "night_pressure_tag":
+			var t: String = str(e.get("tag", ""))
+			if t != "" and not out.has(t):
+				out.append(t)
+	return out
+
+
+# B2 polish: per-night pin check. True iff there is an entry with
+# id="npc_keep" and target=<target_id>. Used by the Victor night-9 失联
+# logic to keep him connected when the player picked victor_stay.
+func get_npc_keep(target_id: String) -> bool:
+	for e in entries:
+		if e["id"] == "npc_keep" and str(e["target"]) == target_id:
+			return true
+	return false
+
+
+# B2 polish: per-night removal check (sibling of npc_keep). True iff
+# there is an entry with id="npc_remove" and target=<target_id>. Used by
+# the night-report diff to branch on "Daniel left tonight" (driven by
+# the let_daniel_go card).
+func get_npc_remove(target_id: String) -> bool:
+	for e in entries:
+		if e["id"] == "npc_remove" and str(e["target"]) == target_id:
+			return true
+	return false
+
+
+# B2 polish: pretty-print the new effect IDs for the day panel.
+func _summary_b2(id: String, e: Dictionary) -> String:
+	match id:
+		"radio_response":
+			return "电台响应 %+d 秒" % int(round(float(e["value"])))
+		"night_pressure_tag":
+			var t: String = str(e.get("tag", ""))
+			return "压力标签 +%s" % (t if t != "" else "—")
+		"npc_keep":
+			return "同伴保留：%s" % e["target"]
+		"npc_remove":
+			return "同伴离开：%s" % e["target"]
+		_:
+			return ""
+
+
 # Compact list of human-readable summaries for the day panel.
 func summarize() -> Array:
 	var out: Array = []
@@ -160,6 +248,9 @@ func summarize() -> Array:
 				line = "Elias 速度 +%.0f" % e["bonus"]
 			"helper_work_rate":
 				line = "同伴速度 +%.0f" % e["bonus"]
+			"radio_response", "night_pressure_tag", "npc_keep", "npc_remove":
+				var b2_line: String = _summary_b2(id, e)
+				line = b2_line if b2_line != "" else "%s（%s）" % [id, target]
 			_:
 				line = "%s（%s）" % [id, target]
 		out.append(line)

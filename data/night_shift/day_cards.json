@@ -766,6 +766,130 @@
       ],
       "name_en": "Let Daniel Stay",
       "body_en": "I can't see the end of that south road. I'll carry him on our books even with a busted shoulder. I'll find another way tomorrow; tonight I won't let him walk out alone."
+    },
+    {
+      "id": "tom_memorial",
+      "type": "setup",
+      "name": "追思 Tom",
+      "body": "昨夜在值班台前，他接过我递给他的保温杯。我还没来得及说一句谢谢。今晚他不会来了——门口少一个背包，仓库还堆着他昨天搬回来的板。",
+      "cost": {},
+      "gain": {
+        "trust": 1
+      },
+      "effects": [],
+      "tags": [
+        "tom",
+        "memorial",
+        "npc"
+      ],
+      "requires_unlocked": [
+        "tom"
+      ],
+      "name_en": "Remember Tom",
+      "body_en": "Last night at the watch desk he took the thermos I handed him. I never got to say thank you. Tonight, he won't come back — one less backpack at the door, and yesterday's planks still stacked in storage."
+    },
+    {
+      "id": "victor_go_find",
+      "type": "rescue",
+      "name": "派搜救找 Victor",
+      "body": "调两名队员带电池沿 Victor 最后报出的街牌往城西走。路上风很大；暴露度今晚会涨，但城西那条频率我们不能再让它冷下去。",
+      "cost": {
+        "medicine": 1,
+        "battery": 1
+      },
+      "gain": {
+        "exposure": 1
+      },
+      "effects": [
+        {
+          "id": "radio_response",
+          "value": 2
+        },
+        {
+          "id": "night_pressure_tag",
+          "tag": "noise"
+        }
+      ],
+      "tags": [
+        "victor",
+        "rescue",
+        "noise"
+      ],
+      "name_en": "Send a Search for Victor",
+      "body_en": "I send two crew out with spare batteries, following Victor's last street name toward the west. The wind's up; exposure climbs tonight, but I can't let that frequency go cold."
+    },
+    {
+      "id": "victor_stay",
+      "type": "people",
+      "name": "让 Victor 留在原地",
+      "body": "Victor 报的那条街明早可能封路。我让他别动。今晚我自己追他的信号，不让他再走远一步。",
+      "cost": {},
+      "gain": {
+        "exposure": -1
+      },
+      "effects": [
+        {
+          "id": "npc_keep",
+          "target": "victor"
+        }
+      ],
+      "tags": [
+        "victor",
+        "people",
+        "keep"
+      ],
+      "name_en": "Tell Victor to Stay Put",
+      "body_en": "Victor's street could be cordoned off by morning. I tell him not to move. Tonight I'll chase his signal myself; he doesn't take another step."
+    },
+    {
+      "id": "victor_broadcast",
+      "type": "broadcast",
+      "name": "公开喊 Victor",
+      "body": "今晚我不等他先开口。直接把 Victor 的名字打进公开频段——如果他还在，他会回；如果不在，至少我们让这片城西听见还有人在。",
+      "cost": {
+        "battery": 1
+      },
+      "gain": {
+        "trust": 1,
+        "exposure": 2
+      },
+      "effects": [
+        {
+          "id": "radio_window",
+          "bonus": 8
+        }
+      ],
+      "tags": [
+        "victor",
+        "broadcast",
+        "exposure"
+      ],
+      "name_en": "Call Out to Victor",
+      "body_en": "Tonight I don't wait for him to speak first. I put Victor's name onto the open frequency. If he's still out there, he'll answer; if not, at least the west side hears we're still here."
+    },
+    {
+      "id": "victor_silent",
+      "type": "broadcast",
+      "name": "对 Victor 也沉默",
+      "body": "哪怕 Victor 的频段还在叫，我也不开口。外面追踪的人只要听出来，今晚的体育馆撑不到天亮——Victor 也明白这个。",
+      "cost": {},
+      "gain": {
+        "exposure": -1
+      },
+      "effects": [
+        {
+          "id": "radio_response",
+          "value": -1
+        }
+      ],
+      "tags": [
+        "victor",
+        "broadcast",
+        "quiet",
+        "silent"
+      ],
+      "name_en": "Stay Silent — Even for Victor",
+      "body_en": "Even though Victor's frequency is calling, I stay quiet. The trackers will only need to hear us once for this gym to not see dawn — Victor knows that too."
     }
   ]
 }
