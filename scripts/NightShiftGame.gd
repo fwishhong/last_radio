@@ -433,7 +433,7 @@ func _load_data() -> void:
 func _load_assets() -> void:
 	# Background plates
 	var bg_keys := {
-		"cover": "stadium_room_day_clean.png",
+		"cover": "cover_keyart_v2.png",
 		"day": "day_planning_table_clean.png",
 		"night": "stadium_room_topdown_clean.png",
 		"report": "night_report_clipboard_clean.png",
