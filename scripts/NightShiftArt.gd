@@ -163,14 +163,15 @@ static func hotspot_texture_key(id: String, data: Dictionary, context: Dictionar
 			if bool(data.get("active", false)) or bool(data.get("warning", false)) or value < 70.0:
 				return "medbay_warning"
 			return "medbay_idle"
-		if id == "storage":
-			if value < 28.0:
-				return "storage_empty"
-			if player_assigned and bool(data.get("active", false)):
-				return "storage_repairing"
-			if bool(data.get("active", false)) or bool(data.get("warning", false)) or value < 70.0:
-				return "storage_shortage"
-			return "storage_idle"
+	if kind == "storage":
+		var player_assigned_s := str(context.get("player_target_id", "")) == id
+		if value < 28.0:
+			return "storage_empty"
+		if player_assigned_s and bool(data.get("active", false)):
+			return "storage_repairing"
+		if bool(data.get("active", false)) or bool(data.get("warning", false)) or value < 70.0:
+			return "storage_shortage"
+		return "storage_idle"
 	return ""
 
 static func hotspot_texture_size(id: String) -> Vector2:
