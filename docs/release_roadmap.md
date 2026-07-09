@@ -137,9 +137,10 @@
 | M13.1 | player_repair_*.png 重做 3 帧 (image-to-image 让角色风格一致) + 接回 player_repair_token | 1d | ✅ `2c006ca` | polish spec §6.3 |
 | M14 | 25 张 day card body 独白化 (zh 先) | 1d | ✅ `a0601a8` | polish spec §6.3 |
 | M11 | NPC AI 接进主循环 + 软锁定 + zombie 视觉强化 (4 条规则 + 0.2s 重评 + 12/10 修复速率 + pale-green zombie tint + ±2px jitter) | 2d | ✅ `2dc9118` | polish spec §4 / §5 |
-| M12 | NPC sprite + 顶部状态条 — B4a status bar 已发,NPC 场域 sprite 沿用 procedural (后续如需 art swap 见 M16) | 1d | ✅ `3636be6` (B4a status bar); NPC 角色立绘 (`character_nora/elias.png`) 在 master 但未接到夜战场域绘制层 | polish spec §4.3 / §4.4 / §5 |
+| M12 | NPC sprite + 顶部状态条 — B4a status bar 已发,NPC 场域 sprite 沿用 procedural (后续如需 art swap 见 M16) | 1d | ✅ `3636be6` (B4a status bar); NPC 角色立绘 (`character_nora/elias.png`) 在 master 但未接到夜战场域绘制层 — 由 M16 关闭 | polish spec §4.3 / §4.4 / §5 |
 | M13 | Cover / Tutorial Step 4 / Night Report 日志化 | 2d | ✅ `9e3bfec` (#2) | polish spec §6 |
 | M15 | 章节延展：角色来去 + Victor 失联 (lily/daniel/tom unlocks + tom_memorial + victor_static + npc_remove/keep + npc_loss + signal_quality) | 2d | ✅ `6ed9b77` (data) + `e6d4e91` (runtime) | polish spec §3 / §6.4 |
+| M16 | NPC 场域 sprite 接入 — `scripts/NpcSpriteLayer.gd` (idle/walk 切换 + dominant-axis facing + 0.15s walk cycle) 把 `character_nora/elias.png` + 48 walk 帧接进夜战场域；z-order: enemy_layer < npc_sprite_layer < zombie_outside_layer | 1d | ✅ `feature/m16-npc-field-sprite` (此 commit) | polish spec §4.3 / §5.2 |
 | B3 | spec dependency-graph tool (`tools/spec_depgraph.gd` + lib + test) | 0.25d | ✅ `d27db64` (#6) | polish spec 全章节 → JSON |
 | B4a | §4.4 NPC UI 状态条 (`scripts/NpcStatusBar.gd` + 4 i18n + test) | 0.5d | ✅ `3636be6` (#7) | polish spec §4.4 |
 | B4b | §7.6+7.7 i18n hooks 13 keys + 接入 narrative diff | 0.25d | ✅ `b23c12c` (#9) | polish spec §7.6 / §7.7 |
@@ -202,6 +203,16 @@ exist on disk but are not yet drawn into the night-battle scene —
 the visible-field NPC rendering still relies on the procedural
 circle placeholder used for enemies. Field sprite swap is a
 candidate for the next polish pass or for M16 if direction agreed.
+
+**Closed by M16** (commit on `feature/m16-npc-field-sprite`):
+`scripts/NpcSpriteLayer.gd` now owns idle + walk textures per NPC,
+syncs position from `npc_state[]`, toggles idle/walk on movement
+delta, picks dominant-axis facing, and cycles walk frames at 0.15 s.
+Canvas order enforced by `tools/npc_sprite_layer_order_test.gd`:
+`enemy_layer` < `npc_sprite_layer` < `zombie_outside_layer` (NPC art
+over procedural zombie dots, under window/door breach sprites).
+3 new tests + 2 new captures bring the headless gate from 22 to
+25 suites.
 
 **Ready for**: Steam beta + store finalization per Launch checklist,
 OR a new polish direction (M16) — user's call.
