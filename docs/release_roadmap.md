@@ -145,6 +145,7 @@
 | B4b | §7.6+7.7 i18n hooks 13 keys + 接入 narrative diff | 0.25d | ✅ `b23c12c` (#9) | polish spec §7.6 / §7.7 |
 | B1+B2 | runtime hooks for day-card effects + NPC lifecycle (radio_response / night_pressure_tag / npc_keep / npc_remove + was_ever_with_us + SAVE v6 + 49-assertion test) | 1.5d | ✅ `1c22eb4` (#5) | polish spec §3 / §4.4 / §6.4 |
 | B2-fix | i18n dedup of B4b duplicate per-NPC keys (Godot JSON last-occ-wins → first-occ-wins) | 0.05d | ✅ `5cba152` | polish spec §7.6 / §7.7 |
+| B5 | cover keyart v2.1 (PR #11) — 1280x720 unified stadium interior, strip scoreboard `HOME`/`GUEST` English, wire `NightShiftGame._load_assets['cover']` to `cover_keyart_v2.png` | 0.5d | ✅ `847bd08` (squash) | polish spec §6 |
 
 **预计总工时**：8 天。**实际**：~7.5 天。详见 polish spec §9。
 
@@ -164,3 +165,13 @@ One bug surfaced + fixed during merge: B4b's commit had accidentally added
 the per-NPC narrative + survivor brief keys twice in both zh.json and en.json;
 Godot's JSON parser uses the last occurrence, silently overriding the intended
 values. `5cba152` drops the trailing duplicates.
+
+## Cover keyart v2.1 closeout (2026-07-09)
+
+Polish backlog B5 shipped via PR #11. Squashed to single commit
+`847bd08` (master at `694ed98c`). 22/22 headless suite gate green.
+
+Visual verification: `tools/capture_cover_monologue.gd` →
+`user://screenshots/m13_cover_monologue.png` (1.15 MB, 1280x720) shows
+the new cover bg with player silhouette + warm table + cool blue / amber
+contrast; distant scoreboard clean of `HOME` / `GUEST` English.

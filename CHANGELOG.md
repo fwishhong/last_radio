@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- feat(art): M15 polish B5 — cover keyart v2.1 (PR #11, closes polish
+  cover-screen visual gap). New unified 1280x720 stadium-interior cover
+  keyart replaces the old `stadium_room_day_clean.png` as cover bg:
+  `assets/final/night_shift/cover_keyart_v2.png` (1.07 MB). Distant
+  scoreboard `HOME`/`GUEST` English stripped — visual placeholder only
+  (neutral symbol / dark block / whitespace). HAM radio faceplate
+  retained only a small LED + dim dial ticks; water-jug / crate /
+  blanket / roadblock / exit / extinguisher signage all clean.
+  `NightShiftGame._load_assets['cover']` re-pointed to
+  `cover_keyart_v2.png` (was `stadium_room_day_clean.png`). 22/22
+  headless suite gate green. Visual verification via
+  `tools/capture_cover_monologue.gd` →
+  `user://screenshots/m13_cover_monologue.png` (1.15 MB, 1280x720,
+  player silhouette + warm table + cool blue/amber contrast, no
+  English anywhere on bg).
 - feat(runtime): M15 polish B2 — runtime hooks for day-card effects + NPC
   lifecycle. `NightShiftDayEffects` gains 4 new SUPPORTED_IDs
   (`radio_response`, `night_pressure_tag`, `npc_keep`, `npc_remove`) +
