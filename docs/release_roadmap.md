@@ -136,10 +136,10 @@
 | ⑤ (M11.5) | 启动默认静音 (Settings 默认 muted=true + CLI flag override) | 0.25d | ✅ `de2c99d` | polish spec §6.2 |
 | M13.1 | player_repair_*.png 重做 3 帧 (image-to-image 让角色风格一致) + 接回 player_repair_token | 1d | ✅ `2c006ca` | polish spec §6.3 |
 | M14 | 25 张 day card body 独白化 (zh 先) | 1d | ✅ `a0601a8` | polish spec §6.3 |
-| M11 | NPC AI 接进主循环 + 软锁定 + zombie 视觉强化 | 2d | 🔜 | polish spec §4 / §5 |
-| M12 | NPC sprite + 顶部状态条 | 1d | 🔜 | polish spec §4.3 / §4.4 / §5 |
+| M11 | NPC AI 接进主循环 + 软锁定 + zombie 视觉强化 (4 条规则 + 0.2s 重评 + 12/10 修复速率 + pale-green zombie tint + ±2px jitter) | 2d | ✅ `2dc9118` | polish spec §4 / §5 |
+| M12 | NPC sprite + 顶部状态条 — B4a status bar 已发,NPC 场域 sprite 沿用 procedural (后续如需 art swap 见 M16) | 1d | ✅ `3636be6` (B4a status bar); NPC 角色立绘 (`character_nora/elias.png`) 在 master 但未接到夜战场域绘制层 | polish spec §4.3 / §4.4 / §5 |
 | M13 | Cover / Tutorial Step 4 / Night Report 日志化 | 2d | ✅ `9e3bfec` (#2) | polish spec §6 |
-| M15 | 章节延展：角色来去 + Victor 失联 | 2d | 🔜 | polish spec §3 / §6.4 |
+| M15 | 章节延展：角色来去 + Victor 失联 (lily/daniel/tom unlocks + tom_memorial + victor_static + npc_remove/keep + npc_loss + signal_quality) | 2d | ✅ `6ed9b77` (data) + `e6d4e91` (runtime) | polish spec §3 / §6.4 |
 | B3 | spec dependency-graph tool (`tools/spec_depgraph.gd` + lib + test) | 0.25d | ✅ `d27db64` (#6) | polish spec 全章节 → JSON |
 | B4a | §4.4 NPC UI 状态条 (`scripts/NpcStatusBar.gd` + 4 i18n + test) | 0.5d | ✅ `3636be6` (#7) | polish spec §4.4 |
 | B4b | §7.6+7.7 i18n hooks 13 keys + 接入 narrative diff | 0.25d | ✅ `b23c12c` (#9) | polish spec §7.6 / §7.7 |
@@ -152,7 +152,7 @@
 ## M15 polish closeout (2026-07-07)
 
 Polish backlog B1–B4b shipped through PR series #5–#9. Master at `1c22eb4`,
-canonical 25-suite headless gate green (21 AGENTS.md + 4 polish-specific).
+canonical 22-suite headless gate green (per AGENTS.md "Run all headless tests").
 
 Merged in order: #6 (B3 spec depgraph) → #7 (B4a NPC status bar) → #9
 (B4b narrative hooks i18n) → #5 (B2 runtime hooks, rebased + dedup fix).
@@ -175,3 +175,33 @@ Visual verification: `tools/capture_cover_monologue.gd` →
 `user://screenshots/m13_cover_monologue.png` (1.15 MB, 1280x720) shows
 the new cover bg with player silhouette + warm table + cool blue / amber
 contrast; distant scoreboard clean of `HOME` / `GUEST` English.
+
+## M11 + M12 + M15 polish closeout (2026-07-09)
+
+Roadmap table was lagging behind master — flipped M11/M12/M15 from
+🔜 to ✅ in this commit. All three shipped earlier in the polish
+push; only the doc index hadn't been updated. Tag `v0.7-m15-polish-done`
+already exists on master.
+
+| Milestone | Commit | Polish spec covered |
+|---|---|---|
+| **M11** NPC AI 主循环 | `2dc9118` | §4.1–4.2 (4 rules) + §4.5–4.6 (state schema + tick) + §5 (zombie tint/jitter) + §4.7 (`tools/npc_ai_test.gd` 10 assertions) |
+| **M12** NPC 状态条 | `3636be6` (#7) | §4.4 (NpcStatusBar + 4 i18n) — status bar shipped via B4a |
+| **M15** 章节延展 | `6ed9b77` (data) + `e6d4e91` (runtime) | §3.1 (lily/daniel/tom unlocks) + §6.4 (npc_remove/keep + npc_loss + signal_quality=0 走 static-only) + B2 runtime hooks (`1c22eb4`) |
+
+22/22 headless gate green (verified 2026-07-09 20:25). NPC AI
+emergency gate verified by `npc_ai_test.gd` (rule 1: `value<86` →
+`value<0.35*max`); soft-commit 2s + defer-to-player + 1.5s walk
+cooldown verified via `npc_ai_test.gd` (rules 2–4); zombie visual
+distinction verified by manual play + capture tools under
+`tools/capture_*`.
+
+**Outstanding from M12 polish spec §4.3**: `character_nora.png` /
+`character_elias.png` (and walk frames under `nora_walk/` `elias_walk/`)
+exist on disk but are not yet drawn into the night-battle scene —
+the visible-field NPC rendering still relies on the procedural
+circle placeholder used for enemies. Field sprite swap is a
+candidate for the next polish pass or for M16 if direction agreed.
+
+**Ready for**: Steam beta + store finalization per Launch checklist,
+OR a new polish direction (M16) — user's call.
