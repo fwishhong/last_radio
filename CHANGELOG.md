@@ -8,6 +8,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- feat(npc): M16 polish closeout — wire `character_nora.png` /
+  `character_elias.png` (plus 48 walk frames under `nora_walk/` and
+  `elias_walk/`) into the night-battle scene via a new
+  `scripts/NpcSpriteLayer.gd` module (polish spec §4.3 + §5.2). The
+  layer sits between `enemy_layer` (procedural zombie circles) and
+  `zombie_outside_layer` (window / door breach sprites) in canvas
+  z-order so NPC figures draw OVER enemy dots but UNDER the
+  outside-window zombies. Per-NPC behaviour: idle texture while
+  stationary (< 1.5 px delta), walk-frame swap on movement with a
+  dominant-axis facing pick (`|dx|>|dy|` → left/right, `|dy|>|dx|` →
+  up/down, tie → keep previous), 0.15 s per walk frame (≈ 6.7 fps
+  walk cycle). `NightShiftGame._ready` instantiates the layer next to
+  `_build_walk_frames`; `_build_ui` adds it to the canvas between
+  `enemy_layer` and `zombie_outside_layer` with `z_index = 2`; the
+  ally-join unlock loop calls `add_ally` on the new NPC; the
+  `npc_remove` day-card effect calls `remove_ally` at the pick site
+  (matching the existing `allies[target_id] = false` mutation).
+  `_tick_npcs` calls `npc_sprite_layer.refresh(npc_state, delta)` after
+  the per-NPC state write so position + walk-cycle match the AI tick.
+  Three new tests — `tools/npc_sprite_layer_test.gd` (unit isolation:
+  add_ally idempotent + sprite creation, refresh movement flips walking
+  + swaps walk frame, refresh no-movement returns to idle, remove_ally
+  clean teardown, refresh self-bootstraps unknown NPC, walk frame cycle
+  advances), `tools/npc_sprite_layer_order_test.gd` (canvas child
+  index after `enemy_layer` and before `zombie_outside_layer`,
+  `z_index == 2`), `tools/npc_walk_dir_test.gd` (dominant-axis pick:
+  `|dx|>|dy|` → left/right, `|dy|>|dx|` → up/down, `|dx|==|dy|` →
+  keep previous, default "down" if no previous) — bring the canonical
+  headless gate from 22 to 25 suites. Two new captures —
+  `tools/capture_npc_sprite_idle.gd` (Nora + Elias at default
+  positions, idle texture; PNG → `user://screenshots/m16_npc_idle.png`)
+  and `tools/capture_zombie_vs_npc.gd` (zombie procedural circles +
+  NPC art on the same frame; PNG →
+  `user://screenshots/m16_zombie_vs_npc.png`) — verify the §5.2
+  visual contrast (pale-green procedural zombies vs full character
+  art NPCs). No new art — all sprites and walk frames were already on
+  disk from M12 / M15; no edits to `data/night_shift/*.json`; no
+  rewiring of the existing `_build_walk_frames` (player-side stays
+  separate from NPC-side). Zombie visual (pale-green tint + ±2 px
+  jitter from M11 commit `2dc9118`) untouched.
 - feat(art): M15 polish B5 — cover keyart v2.1 (PR #11, closes polish
   cover-screen visual gap). New unified 1280x720 stadium-interior cover
   keyart replaces the old `stadium_room_day_clean.png` as cover bg:

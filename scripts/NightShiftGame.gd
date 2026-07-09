@@ -255,6 +255,7 @@ var flash_rect: ColorRect  # blackout / danger pulse
 var radio_panel: Panel  # contact progress panel (only visible at the radio)
 var radio_progress_bar: ColorRect
 var npc_status_bar: NpcStatusBar  # polish spec §4.4 — top-of-screen NPC status rows
+var npc_sprite_layer: NpcSpriteLayer  # M16 polish closeout — in-scene NPC sprite layer (polish spec §4.3 + §5.2)
 var menu_ui  # MenuUI instance (CanvasLayer), see _build_menu_ui
 var tutorial_overlay  # TutorialOverlay instance (CanvasLayer), see _build_tutorial_overlay
 # Cached state for re-rendering after locale switch. _show_night_report is
@@ -651,9 +652,24 @@ func _actor_for_facing(facing: String) -> Texture2D:
 # ============================================================================
 
 func _build_ui() -> void:
+	# Idempotent: headless tests may call _build_ui() directly (see
+	# locale_e2e_test.gd) while _ready() also calls it. If we already
+	# have a canvas, skip — re-building would create duplicate children
+	# (e.g. "Can't add child NpcSpriteLayer, already has a parent").
+	if canvas != null:
+		return
 	canvas = CanvasLayer.new()
 	canvas.layer = 0
 	add_child(canvas)
+
+	# M16 polish closeout (polish spec §4.3 + §5.2): NPC field sprite
+	# layer. Instantiated here (before the enemy_layer / zombie_outside_
+	# layer adds below) so headless tests that call _build_ui() directly
+	# (without going through _ready) still get a live layer. The layer
+	# itself builds child sprites lazily in add_ally() / refresh().
+	if npc_sprite_layer == null:
+		npc_sprite_layer = NpcSpriteLayer.new()
+		npc_sprite_layer.name = "NpcSpriteLayer"
 
 	# World-layer parallax — drawn BEHIND the room (z_index < 0). The far
 	# plate is almost static; the mid plate drifts with parallax_offset().
@@ -735,7 +751,16 @@ func _build_ui() -> void:
 	canvas.add_child(hotspot_layer)
 
 	enemy_layer = Node2D.new()
+	enemy_layer.name = "EnemyLayer"
 	canvas.add_child(enemy_layer)
+
+	# M16 polish closeout (polish spec §4.3 + §5.2): NPC field sprite
+	# layer. Sits AFTER enemy_layer (procedural zombie circles draw
+	# below NPC figures) and BEFORE zombie_outside_layer (window/door
+	# breach sprites draw over NPC). The order is enforced by the canvas
+	# child index; see tools/npc_sprite_layer_order_test.gd.
+	npc_sprite_layer.z_index = 2
+	canvas.add_child(npc_sprite_layer)
 
 	# Zombie-outside layer — independent sprites standing outside barrier
 	# hotspots (door / window). Drawn IN FRONT of the room bg + hotspot
@@ -2066,6 +2091,12 @@ func _on_day_card_pressed(card_id: String) -> void:
 			if target_id != "":
 				allies[target_id] = false
 				was_ever_with_us[target_id] = true
+				# M16 polish closeout: drop the NPC's in-scene sprite on
+				# removal so the leaving NPC disappears from the night
+				# battlefield (the layer also self-cleans stale sprites on
+				# its next refresh if npc_state[id] is dropped elsewhere).
+				if npc_sprite_layer != null:
+					npc_sprite_layer.remove_ally(target_id)
 				_log("%s 将离开。" % _narrative_ally_label(target_id))
 	_log("白天选择：%s" % str(card.get("name", card_id)))
 	_play_sfx("unlock")
@@ -3063,6 +3094,12 @@ func _tick_npcs(delta: float) -> void:
 	# tick itself so we don't churn Panel allocations per frame.
 	if npc_status_bar != null:
 		npc_status_bar.refresh(allies, npc_state, float(resources.get("trust", 3.0)))
+	# M16 polish closeout: refresh the in-scene NPC sprite layer too —
+	# same cadence as the status bar so position sync + walk-frame cycle
+	# match the AI ticks. The layer self-bootstraps via add_ally() if a
+	# NPC is in npc_state but not yet on screen.
+	if npc_sprite_layer != null:
+		npc_sprite_layer.refresh(npc_state, delta)
 
 
 func _update_player_movement(delta: float) -> void:
@@ -3694,6 +3731,11 @@ func _end_night(success: bool) -> void:
 							"eval_timer": 0.2,
 							"speed": 180.0,
 						}
+						# M16 polish closeout: spawn the NPC's field sprite at
+						# the initial position. Refresh() is idempotent so this
+						# is safe to call once at unlock.
+						if npc_sprite_layer != null:
+							npc_sprite_layer.add_ally(u, init_pos)
 			elif u in ["right_window", "back_door", "radio", "antenna", "medbay", "storage"]:
 				if not unlocked_hotspots.has(u):
 					unlocked_hotspots.append(u)
