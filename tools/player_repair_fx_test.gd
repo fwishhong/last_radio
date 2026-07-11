@@ -134,15 +134,20 @@ func _initialize() -> void:
 		printerr("[FAIL] scale at phase=0 should be (1,1), got %s" % str(sc0))
 		fail_count += 1
 
-	# Test 15: is_repairable_hotspot returns true for barrier
-	if PlayerRepairFxScript.is_repairable_hotspot("barrier"):
-		pass_count += 1
-	else:
-		printerr("[FAIL] 'barrier' should be repairable")
-		fail_count += 1
+	# Test 15: is_repairable_hotspot returns true for the allowlist
+	# (barrier / generator / antenna / storage). Each one gets the
+	# hammer cycle -- visual-bug-3 fix expanded scope beyond barrier.
+	for k in ["barrier", "generator", "antenna", "storage"]:
+		if PlayerRepairFxScript.is_repairable_hotspot(k):
+			pass_count += 1
+		else:
+			printerr("[FAIL] '%s' should be repairable" % k)
+			fail_count += 1
 
-	# Test 16: is_repairable_hotspot returns false for radio/medbay/generator/antenna/support
-	for k in ["radio", "medbay", "generator", "antenna", "support", ""]:
+	# Test 16: is_repairable_hotspot returns false for radio/medbay/support
+	# (radio + medbay have their own interaction flows; "support" is the
+	# medbay kind, "storage" was renamed out of "support" in visual-bug-3).
+	for k in ["radio", "medbay", "support", ""]:
 		if not PlayerRepairFxScript.is_repairable_hotspot(k):
 			pass_count += 1
 		else:

@@ -81,7 +81,7 @@ const HOTSPOT_KIND := {
 	"radio": "radio",
 	"antenna": "antenna",
 	"medbay": "support",
-	"storage": "support"
+	"storage": "storage"
 }
 
 const HOTSPOT_COLOR := {
@@ -1183,6 +1183,21 @@ func _show_slot_picker() -> void:
 	# Hotspots only belong on the night map; cover/slot/difficulty pickers
 	# would otherwise show stale button rings over the background.
 	hotspot_layer.visible = false
+	# Hide the player character + repair tokens. _show_slot_picker() is the
+	# cover / save-slot entry point and the slot cards (y=280, 3x320 wide
+	# with a 30px gap) leave a visible gap at x=465..495 — which happens
+	# to be exactly where the default player_pos (640, 396) lands. Without
+	# hiding these tokens the player silhouette bleeds through between the
+	# first and second slot card on every cover / load screen. The night
+	# and day entry points (_show_night / _show_day) re-enable the walk
+	# sprite below; the repair tokens stay hidden until their own logic
+	# lights them up during a repair tick.
+	if player_token != null:
+		player_token.visible = false
+	if hammer_sprite != null:
+		hammer_sprite.visible = false
+	if player_repair_token != null:
+		player_repair_token.visible = false
 	if art.get("cover"):
 		bg.texture = art["cover"]
 	_play_music("cover")
@@ -1791,6 +1806,13 @@ func _show_day() -> void:
 	# Day picker overlays the room background; hide the night-only hotspots
 	# so their stale state rings don't bleed through.
 	hotspot_layer.visible = false
+	# Defensive: _show_slot_picker hides the player token; re-enable it on
+	# the day screen so the picker can show character silhouettes over
+	# the room art if/when a future day-card wants them. Today no day
+	# card draws a character, but keeping the re-enable here makes the
+	# show/hide contract symmetric with _show_night() below.
+	if player_token != null:
+		player_token.visible = true
 	if art.get("day"):
 		bg.texture = art["day"]
 	_play_music("day")
@@ -2084,6 +2106,12 @@ func _show_night() -> void:
 	card_layer.visible = false
 	# Reveal the hotspot map now that we're back on the room layout.
 	hotspot_layer.visible = true
+	# Defensive: _show_slot_picker hides the player token at the cover
+	# screen. Re-enable it for the night map so the player is actually
+	# visible. Same pattern as _show_day() — the show/hide contract is
+	# symmetric between the slot picker and the playable phases.
+	if player_token != null:
+		player_token.visible = true
 	if art.get("night"):
 		bg.texture = art["night"]
 	# Reset the dawn-fade overlay from the previous night. Without this
@@ -2168,8 +2196,8 @@ func _show_night() -> void:
 		# Cap bonus only applies to the right kind of hotspot
 		if kind == "barrier" and day_effects.get_cap_bonus(str(id)) > 0.0:
 			max_val += day_effects.get_cap_bonus(str(id))
-		elif kind == "support" and day_effects.get_cap_bonus(str(id)) > 0.0:
-			# support_cap targets are usually already id-specific
+		elif (kind == "support" or kind == "storage") and day_effects.get_cap_bonus(str(id)) > 0.0:
+			# support_cap / storage_cap targets are usually already id-specific
 			max_val += day_effects.get_cap_bonus(str(id))
 		max_val = max(10.0, max_val)
 		hotspots[id] = {
@@ -2699,7 +2727,12 @@ func _fx_burst_for_kind(id: String, h: Dictionary, intensity: float) -> void:
 		"generator":
 			Fx.burst_spark(fx_particles, pos, intensity)
 		"support":
-			# Antenna + radio + medbay + storage: amber static-ish spark.
+			# Antenna + radio + medbay (amber static-ish spark).
+			Fx.burst_spark(fx_particles, pos, intensity * 0.7)
+		"storage":
+			# Storage was historically lumped into kind="support"; after the
+			# storage split (visual-bug-3) it keeps the same amber spark
+			# visual so the FX budget for support-class hotspots is unchanged.
 			Fx.burst_spark(fx_particles, pos, intensity * 0.7)
 		_:
 			Fx.burst_window_crack(fx_particles, pos, intensity)
@@ -2725,13 +2758,15 @@ func _fx_damage_tier(value: float, max_value: float) -> int:
 # immediately (so the player feels each chain reward land).
 var _fx_combo_accum: float = 0.0
 func _fx_on_repair_tick(id: String, delta: float) -> void:
-	# Combo only applies to barriers / generator / antenna / support —
-	# radio and medbay don't take repair damage in the same way, and
-	# standing at them for a contact or healing should not snowball trust.
+	# Combo only applies to barriers / generator / antenna / support /
+	# storage — radio and medbay don't take repair damage in the same
+	# way, and standing at them for a contact or healing should not
+	# snowball trust. Storage joined the combo set after the kind
+	# rename in visual-bug-3.
 	var kind: String = ""
 	if hotspots.has(id):
 		kind = String(hotspots[id].get("kind", ""))
-	if kind not in ["barrier", "generator", "antenna", "support"]:
+	if kind not in ["barrier", "generator", "antenna", "support", "storage"]:
 		return
 	fx_combo_time_left = COMBO_WINDOW
 	_fx_combo_accum += delta
@@ -3176,6 +3211,13 @@ func _update_hotspots(delta: float) -> void:
 			drain = 4.0 * delta * day_effects.get_drain_multiplier(str(id), "support") * drain_mod
 		elif kind == "support" and h["active"]:
 			drain = 2.0 * delta * day_effects.get_drain_multiplier(str(id), "support") * drain_mod
+		elif kind == "storage" and h["active"]:
+			# Storage was historically lumped into kind="support"; after the
+			# storage split (visual-bug-3) it keeps the same "support"
+			# base_kind for the drain multiplier so day-cards don't need
+			# to know about the rename. Reads as: any support-style
+			# active drain (medbay + storage) inherits day_effects.
+			drain = 2.0 * delta * day_effects.get_drain_multiplier(str(id), "support") * drain_mod
 		if drain > 0.0:
 			h["value"] = max(0.0, h["value"] - drain)
 
@@ -3206,9 +3248,9 @@ func _update_hotspots(delta: float) -> void:
 		var tier: int = _fx_damage_tier(h["value"], h["max_value"])
 		var prev: int = int(fx_last_damage_tier.get(id, 0))
 		if tier > prev:
-			# Only spawn for barrier / generator / support kinds — radio and
-			# medbay don't take damage in the same visual way.
-			if h["kind"] in ["barrier", "generator", "support"]:
+			# Only spawn for barrier / generator / support / storage kinds
+			# — radio and medbay don't take damage in the same visual way.
+			if h["kind"] in ["barrier", "generator", "support", "storage"]:
 				_fx_burst_for_kind(id, h, 0.5 + 0.25 * float(tier - prev))
 				if tier == 3:
 					# Heavy shake when crossing into critical.
@@ -3494,7 +3536,7 @@ func _update_visual_feedback() -> void:
 				pulse = 0.7
 			elif h["warning"]:
 				pulse = 0.35
-			elif h["active"] and h["kind"] in ["generator", "antenna", "support", "radio"]:
+			elif h["active"] and h["kind"] in ["generator", "antenna", "support", "storage", "radio"]:
 				pulse = 0.2
 			var is_target: bool = (player_target_id == id)
 			var breached: bool = h["breach_timer"] >= 0.0
@@ -3553,6 +3595,15 @@ func _draw_player() -> void:
 		player_token.modulate.a = 0.0
 		player_token.position = player_pos
 		player_token.rotation = 0.0
+	# Walk-sprite visibility: hidden during repair-action so the
+	# player_repair_token (3 art frames with the hammer baked in) reads
+	# on its own instead of stacking with the walk silhouette. Without
+	# this the walk body and the repair body overlap and the hammer
+	# motion blurs out. Re-enabled every frame on idle / walking so the
+	# cover-slot picker's defensive hide from _show_slot_picker() doesn't
+	# leak into the night map after the first repair tick.
+	if player_token != null:
+		player_token.visible = not player_repair_active
 
 	# Drive the procedural hammer sprite. Sits at the player's hand
 	# offset, rotates ±0.5 rad on PlayerRepairFx REPAIR_CYCLE_SEC
@@ -3606,7 +3657,14 @@ func _draw_player() -> void:
 		if player_repair_active:
 			var frame_idx: int = PlayerRepairFx.repair_frame_for(player_repair_timer)
 			player_repair_token.texture = player_repair_textures.get(frame_idx, null)
-			player_repair_token.position = player_pos + Vector2(0.0, 8.0)
+			# Nudge the repair-art token so the hammer reads as "reaching
+			# forward" instead of dead-center on the body. 0.12 scale is
+			# preserved -- it's tied to the art composition. Bug-2 polish
+			# per visual pass: previous (0, 8) had the hammer centered on
+			# the walk silhouette, (8, -4) gives the swing a forward
+			# lean that matches the procedural hammer_sprite's hand offset
+			# (Vector2(22, -54) above the player).
+			player_repair_token.position = player_pos + Vector2(8.0, -4.0)
 			player_repair_token.visible = true
 			player_repair_token.modulate.a = 1.0
 			# Token includes the hammer drawn into the art; suppress the

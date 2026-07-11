@@ -68,7 +68,16 @@ static func repair_scale_for(timer: float) -> Vector2:
 
 
 # Helper: is a hotspot the kind that triggers repair animation?
-# Only "barrier" (door / window) hotspots take player repair ticks.
-# Radio and medbay have their own interaction flows.
+# Any hotspot the player can stand at and tick value up gets the hammer
+# animation so the action reads as "fixing" the equipment visually.
+# Originally scoped to "barrier" only (round-2 conservative), but the
+# visual pass for the Steam demo wants the hammer to fire on every
+# player-fixable hotspot. Allowlist:
+#   - "barrier"   : doors + windows (the original scope)
+#   - "generator" : power-plant stabilizer
+#   - "antenna"   : signal booster
+#   - "storage"   : supply depot (renamed out of "support" in visual-bug-3)
+# Hotspots with their own interaction flow (radio contact, medbay triage)
+# stay excluded -- their UI surfaces provide the visual feedback already.
 static func is_repairable_hotspot(kind: String) -> bool:
-	return kind == "barrier"
+	return kind in ["barrier", "generator", "antenna", "storage"]
